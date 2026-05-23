@@ -20,7 +20,7 @@ class IRClause:
     raw: str
 
 
-_VAR_RE = re.compile(r"\b([A-Z_][A-Za-z0-9_]*)\b")
+_VAR_RE = re.compile(r"\b([A-Z][A-Za-z0-9_]*)\b")
 _HEAD_RE = re.compile(r"^\s*([a-z][A-Za-z0-9_]*)\s*(?:\((.*)\))?\s*$")
 _PRED_CALL_RE = re.compile(r"^\s*([a-z][A-Za-z0-9_]*)\s*(?:\((.*)\))?\s*$")
 _ENUM_FUNCTORS = {"member", "between", "nth1", "nth0"}
@@ -68,6 +68,11 @@ def _predicate_signature(goal: str) -> tuple[str, int] | None:
     arg_blob = match.group(2)
     args = _split_top_level(arg_blob, ",") if arg_blob else []
     return name, len(args)
+
+
+def call_args(goal: str) -> str:
+    match = _PRED_CALL_RE.match(goal)
+    return match.group(2) if match and match.group(2) else ""
 
 
 def build_ir_clauses(raw_clauses: Iterable[str]) -> list[IRClause]:
@@ -139,7 +144,7 @@ def detect_generators(ir_clauses: Iterable[IRClause]) -> list[str]:
 def detect_reusable_variables(ir_clauses: Iterable[IRClause]) -> dict[str, list[str]]:
     reusable: dict[str, list[str]] = {}
     for clause in ir_clauses:
-        counts = Counter(var for var in _VAR_RE.findall(clause.raw) if not var.startswith("_"))
+        counts = Counter(_VAR_RE.findall(clause.raw))
         shared = sorted(var for var, count in counts.items() if count > 1)
         if shared:
             reusable[f"{clause.name}/{len(clause.args)}"] = shared
@@ -173,11 +178,6 @@ def detect_matrix_patterns(ir_clauses: Iterable[IRClause]) -> list[str]:
         if has_nested_nth1:
             matches.add(f"{clause.name}/{len(clause.args)}")
     return sorted(matches)
-
-
-def call_args(goal: str) -> str:
-    match = _PRED_CALL_RE.match(goal)
-    return match.group(2) if match and match.group(2) else ""
 
 
 def detect_nested_subterm_traversals(ir_clauses: Iterable[IRClause]) -> list[str]:
