@@ -103,7 +103,7 @@ safe_memo_goal(Goal) :-
     \+ is_meta_goal(Goal),
     \+ is_io_goal(Goal),
     \+ is_disjunction(Goal),
-    \+ is_arithmetic_or_comparison(Goal).
+    \+ is_builtin_test_goal(Goal).
 
 is_cut(!).
 
@@ -130,14 +130,17 @@ is_io_goal(Goal) :-
                         nl/0, put_char/1, get_char/1, get_code/1,
                         see/1, tell/1]).
 
-is_arithmetic_or_comparison(_ is _).
-is_arithmetic_or_comparison(_ > _).
-is_arithmetic_or_comparison(_ < _).
-is_arithmetic_or_comparison(_ >= _).
-is_arithmetic_or_comparison(_ =< _).
-is_arithmetic_or_comparison(_ =:= _).
-is_arithmetic_or_comparison(_ =\= _).
-is_arithmetic_or_comparison(_ = _).
-is_arithmetic_or_comparison(_ \= _).
-is_arithmetic_or_comparison(_ == _).
-is_arithmetic_or_comparison(_ \== _).
+% Built-in arithmetic, comparison, and unification goals are excluded
+% because they are not user-defined predicates with separable I/O
+% arguments, so the duplicate-call pattern does not apply to them.
+is_builtin_test_goal(_ is _).
+is_builtin_test_goal(_ > _).
+is_builtin_test_goal(_ < _).
+is_builtin_test_goal(_ >= _).
+is_builtin_test_goal(_ =< _).
+is_builtin_test_goal(_ =:= _).
+is_builtin_test_goal(_ =\= _).
+is_builtin_test_goal(_ = _).
+is_builtin_test_goal(_ \= _).
+is_builtin_test_goal(_ == _).
+is_builtin_test_goal(_ \== _).
