@@ -25,8 +25,10 @@ simplify_predicates([Pred | Rest], ProgramIR, Current0, Current, Report0, Report
 simplify_sum_to_n_predicate(Name/2, ProgramIR, Current0, Current, ReportItem) :-
     include(matches_predicate(Name/2), ProgramIR, Clauses),
     Clauses = [Base, Recursive],
-    recognise_sum_to_n_clauses(Name, Base, Recursive, InVar, OutVar),
-    verify_sum_formula_samples(0, 12),
+    classify_sum_clauses(Name, Base, Recursive, SumRecursive),
+    extract_sum_recursive_vars(Name, SumRecursive, InVar, OutVar),
+    sample_verification_range(Start, End),
+    verify_sum_formula_samples(Start, End),
     FormulaBody = [OutVar is InVar * (InVar + 1) // 2],
     replacement_clause(Current0, Name/2, Name, 2, InVar, OutVar, FormulaBody, Current),
     ReportItem = formula_discovered(Name/2, n_times_n_plus_1_over_2).
@@ -34,10 +36,13 @@ simplify_sum_to_n_predicate(Name/2, ProgramIR, Current0, Current, ReportItem) :-
 matches_predicate(Name/Arity, ir_clause(_, Head, _, _)) :-
     functor(Head, Name, Arity).
 
-recognise_sum_to_n_clauses(Name, Base, Recursive, N, S) :-
-    (   is_sum_base_clause(Name, Base), is_sum_recursive_clause(Name, Recursive, N, S)
-    ;   is_sum_base_clause(Name, Recursive), is_sum_recursive_clause(Name, Base, N, S)
-    ).
+classify_sum_clauses(Name, C1, C2, Recursive) :-
+    (   is_sum_base_clause(Name, C1),
+        Recursive = C2
+    ;   is_sum_base_clause(Name, C2),
+        Recursive = C1
+    ),
+    is_sum_recursive_clause(Name, Recursive, _, _).
 
 is_sum_base_clause(Name, ir_clause(_, Head, [], _)) :-
     Head =.. [Name, 0, 0].
@@ -46,6 +51,12 @@ is_sum_recursive_clause(Name, ir_clause(_, Head, Body, _), N, S) :-
     Head =.. [Name, N, S],
     Body = [N > 0, N1 is N - 1, RecGoal, S is S1 + N],
     RecGoal =.. [Name, N1, S1].
+
+extract_sum_recursive_vars(Name, RecursiveClause, N, S) :-
+    is_sum_recursive_clause(Name, RecursiveClause, N, S).
+
+% Verify a small representative range including base case and several recursive steps.
+sample_verification_range(0, 12).
 
 verify_sum_formula_samples(Start, End) :-
     forall(
@@ -66,7 +77,7 @@ sum_to_n_recurrence(N, S) :-
 
 replacement_clause(ProgramIR, Pred, Name, Arity, N, S, FormulaBody, UpdatedIR) :-
     include(not_matches_predicate(Pred), ProgramIR, OtherClauses),
-    atomic_list_concat([c_formula_, Name, '_', Arity], ClauseId),
+    atomic_list_concat([c_, Name, '_formula_', Arity], ClauseId),
     UpdatedIR = [ir_clause(ClauseId, Head, FormulaBody, []) | OtherClauses],
     Head =.. [Name, N, S].
 
