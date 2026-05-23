@@ -1,7 +1,7 @@
 :- module(enumerators, [analyse_enumerators/3]).
 
 analyse_enumerators(BeforeIR, AfterIR, Report) :-
-    collect_enumerator_pairs(BeforeIR, BeforePairs, _BeforeIndexical),
+    collect_enumerator_pairs(BeforeIR, BeforePairs, _),
     collect_enumerator_pairs(AfterIR, AfterPairs, AfterIndexical),
     classify_pairs(BeforePairs, AfterPairs, ClassItems),
     indexical_items(AfterIndexical, IndexicalItems),
@@ -75,10 +75,10 @@ indexical_enumerators(Body, Enums) :-
 indexical_enumerator(Body, nth1/3) :-
     member(nth1(_, Source, Row), Body),
     member(nth1(_, Row, _), Body),
-    Source \== Row,
+    Source \= Row,
     !.
 indexical_enumerator(Body, nth0/3) :-
     member(nth0(_, Source, Row), Body),
     member(nth0(_, Row, _), Body),
-    Source \== Row,
+    Source \= Row,
     !.
