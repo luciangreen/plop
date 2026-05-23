@@ -24,8 +24,8 @@ simplify_predicates([Pred | Rest], ProgramIR, Current0, Current, Report0, Report
 
 simplify_sum_to_n_predicate(Name/2, ProgramIR, Current0, Current, ReportItem) :-
     include(matches_predicate(Name/2), ProgramIR, Clauses),
-    Clauses = [Base, Recursive],
-    classify_sum_clauses(Name, Base, Recursive, SumRecursive),
+    Clauses = [C1, C2],
+    classify_sum_clauses(Name, C1, C2, SumRecursive),
     extract_sum_recursive_vars(Name, SumRecursive, InVar, OutVar),
     sample_verification_range(Start, End),
     verify_sum_formula_samples(Start, End),
@@ -55,31 +55,46 @@ is_sum_recursive_clause(Name, ir_clause(_, Head, Body, _), N, S) :-
 extract_sum_recursive_vars(Name, RecursiveClause, N, S) :-
     is_sum_recursive_clause(Name, RecursiveClause, N, S).
 
-% Verify a small representative range including base case and several recursive steps.
+% 13 samples (0..12) cover the base case and multiple recursive depths with low overhead.
 sample_verification_range(0, 12).
 
 verify_sum_formula_samples(Start, End) :-
     forall(
         between(Start, End, N),
         (
-            sum_to_n_recurrence(N, FromRecurrence),
+            sum_recurrence(N, FromRecurrence),
             FromFormula is N * (N + 1) // 2,
             FromRecurrence =:= FromFormula
         )
     ).
 
-sum_to_n_recurrence(0, 0).
-sum_to_n_recurrence(N, S) :-
+sum_recurrence(0, 0).
+sum_recurrence(N, S) :-
     N > 0,
     N1 is N - 1,
-    sum_to_n_recurrence(N1, S1),
+    sum_recurrence(N1, S1),
     S is S1 + N.
 
 replacement_clause(ProgramIR, Pred, Name, Arity, N, S, FormulaBody, UpdatedIR) :-
     include(not_matches_predicate(Pred), ProgramIR, OtherClauses),
-    atomic_list_concat([c_, Name, '_formula_', Arity], ClauseId),
+    formula_clause_id(ProgramIR, Name, Arity, ClauseId),
     UpdatedIR = [ir_clause(ClauseId, Head, FormulaBody, []) | OtherClauses],
     Head =.. [Name, N, S].
 
 not_matches_predicate(Pred, Clause) :-
     \+ matches_predicate(Pred, Clause).
+
+formula_clause_id(ProgramIR, Name, Arity, ClauseId) :-
+    atomic_list_concat([c_formula_, Name, '_', Arity], BaseId),
+    unique_clause_id(ProgramIR, BaseId, 0, ClauseId).
+
+unique_clause_id(ProgramIR, BaseId, N, ClauseId) :-
+    (   N = 0
+    ->  Candidate = BaseId
+    ;   atomic_list_concat([BaseId, '_', N], Candidate)
+    ),
+    (   member(ir_clause(Candidate, _, _, _), ProgramIR)
+    ->  N1 is N + 1,
+        unique_clause_id(ProgramIR, BaseId, N1, ClauseId)
+    ;   ClauseId = Candidate
+    ).
