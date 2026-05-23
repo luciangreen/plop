@@ -32,10 +32,20 @@ test(does_not_unfold_side_effect_helper) :-
     member(ir_clause(_, caller(_), Body, _), OptimisedIR),
     assertion(Body = [noisy(_)]).
 
-test(optimise_file_writes_output, [setup(make_directory_path('out')), cleanup(delete_file('out/test_stage1_output.pl'))]) :-
-    optimise_file('examples/stage1_input.pl', 'out/test_stage1_output.pl'),
-    parse_file('out/test_stage1_output.pl', ProgramIR),
+test(optimise_file_writes_output, [setup(make_directory_path('out')), cleanup(cleanup_output_file)]) :-
+    output_file_path(OutputPath),
+    optimise_file('examples/stage1_input.pl', OutputPath),
+    parse_file(OutputPath, ProgramIR),
     member(ir_clause(_, combined(_, _), Body, _), ProgramIR),
     assertion(Body = [Y is (X + 1) * 2]).
+
+cleanup_output_file :-
+    output_file_path(OutputPath),
+    (   exists_file(OutputPath)
+    ->  delete_file(OutputPath)
+    ;   true
+    ).
+
+output_file_path('out/test_stage1_output.pl').
 
 :- end_tests(unfold).

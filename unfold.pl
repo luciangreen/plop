@@ -62,7 +62,7 @@ inline_goal(Goal, Helpers, InlinedGoals) :-
 unfoldable_helper(ProgramIR, ir_clause(_, Head, Body, _)) :-
     clause_predicate_from_goal(Head, Pred),
     findall(C, (member(C, ProgramIR), clause_matches_predicate(C, Pred)), Clauses),
-    Clauses = [ir_clause(_, _, _, _)],
+    length(Clauses, 1),
     \+ calls_predicate(Body, Pred),
     forall(member(G, Body), safe_inline_goal(G)).
 
@@ -91,12 +91,10 @@ is_io_goal(Goal) :-
     functor(Goal, Name, Arity),
     member(Name/Arity, [write/1, writeln/1, print/1, format/2, format/3, read/1, read_term/2, read_term/3, open/3, close/1, close/2, nl/0, put_char/1, get_char/1, get_code/1, see/1, tell/1]).
 
-calls_predicate([], _) :- false.
-calls_predicate([Goal | _], Pred) :-
+calls_predicate(Goals, Pred) :-
+    member(Goal, Goals),
     clause_predicate_from_goal(Goal, Pred),
     !.
-calls_predicate([_ | Rest], Pred) :-
-    calls_predicate(Rest, Pred).
 
 clause_predicate(ir_clause(_, Head, _, _), Pred) :-
     clause_predicate_from_goal(Head, Pred).
