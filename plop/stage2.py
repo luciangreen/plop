@@ -104,8 +104,6 @@ def find_sum_to_n_formula(clauses: list[IRClause]) -> FormulaDefinition | None:
             target, expression = is_goal
             if expression.replace(" ", "") == f"{n_var}-1":
                 decremented_var = target
-            if expression.replace(" ", "") in {f"{recursive_result_var or ''}+{n_var}", f"{n_var}+{recursive_result_var or ''}"}:
-                continue
             continue
         parsed_goal = parse_callable(goal)
         if parsed_goal is None:
