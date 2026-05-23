@@ -47,7 +47,7 @@ class Stage2AnalysisTests(unittest.TestCase):
         unfolded = {
             item["predicate"]: item["unfolded"] for item in report["stage2"]["unfolded_predicates"]
         }
-        self.assertEqual(unfolded["combined/2"], "combined(X,Y):- Y is (((X)+1))*2.")
+        self.assertEqual(unfolded["combined/2"], "combined(X,Y):- Y is ((X+1))*2.")
 
         memoisation_candidates = report["stage2"]["memoisation_candidates"]
         self.assertEqual(memoisation_candidates[0]["memoised_name"], "memo_sum_to_n")
