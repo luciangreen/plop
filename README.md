@@ -1,6 +1,6 @@
 # plop
 
-Stage 1 (base-up data unfolding), stage 2 (memoisation), and stage 3 (predicate-to-formula simplification) from `pr3.txt` are implemented as a SWI-Prolog optimiser.
+Stage 1 (base-up data unfolding), stage 2 (memoisation), stage 3 (predicate-to-formula simplification), and stage 4 (enumerator analysis) from `pr3.txt` are implemented as a SWI-Prolog optimiser.
 
 ## Run tests
 
