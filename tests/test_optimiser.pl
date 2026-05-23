@@ -189,6 +189,31 @@ test(does_not_emit_mapping_for_single_level_nth) :-
 
 :- end_tests(indexical).
 
+:- begin_tests(subterm_address).
+
+:- use_module('../subterm_address').
+
+test(subterm_with_address_matrix_style_lookup) :-
+    subterm_with_address([[a, b], [c, d]], [2, 1], X),
+    assertion(X == c).
+
+test(subterm_with_address_compound_term_lookup) :-
+    subterm_with_address(node(left(a), right(b)), [2, 1], X),
+    assertion(X == b).
+
+test(subterm_addresses_collects_nested_list_addresses) :-
+    subterm_addresses([[a, b], [c]], Pairs),
+    assertion(member([]-[[a, b], [c]], Pairs)),
+    assertion(member([1]-[a, b], Pairs)),
+    assertion(member([1, 2]-b, Pairs)),
+    assertion(member([2]-[c], Pairs)),
+    assertion(member([2, 1]-c, Pairs)).
+
+test(subterm_with_address_fails_for_out_of_range_index, [fail]) :-
+    subterm_with_address([x, y], [3], _).
+
+:- end_tests(subterm_address).
+
 :- begin_tests(enumerators).
 
 :- use_module('../optimiser').
