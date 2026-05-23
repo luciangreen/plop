@@ -99,3 +99,54 @@ test(optimise_program_applies_memoisation) :-
     assertion(member(memoised(r/3), Report)).
 
 :- end_tests(memoise).
+
+:- begin_tests(simplify).
+
+:- use_module('../optimiser').
+:- use_module('../simplify').
+
+test(rewrites_sum_to_n_to_formula) :-
+    ProgramIR = [
+        ir_clause(c1, sum_to_n(0, 0), [], []),
+        ir_clause(c2, sum_to_n(N, S),
+            [N > 0, N1 is N - 1, sum_to_n(N1, S1), S is S1 + N],
+            [])
+    ],
+    simplify_program(ProgramIR, OptimisedIR, Report),
+    include(sum_to_n_clause, OptimisedIR, SumClauses),
+    assertion(length(SumClauses, 1)),
+    SumClauses = [ir_clause(_, sum_to_n(_, _), Body, _)],
+    assertion(Body = [S is N * (N + 1) // 2]),
+    assertion(member(formula_discovered(sum_to_n/2, n_times_n_plus_1_over_2), Report)).
+
+test(does_not_rewrite_non_matching_recursive_numeric_predicate) :-
+    ProgramIR = [
+        ir_clause(c1, bad_sum(0, 0), [], []),
+        ir_clause(c2, bad_sum(N, S),
+            [N > 0, N1 is N - 1, bad_sum(N1, S1), S is S1 + (N * 2)],
+            [])
+    ],
+    simplify_program(ProgramIR, OptimisedIR, Report),
+    include(bad_sum_clause, OptimisedIR, BadSumClauses),
+    assertion(length(BadSumClauses, 2)),
+    assertion(Report = []).
+
+test(optimise_program_applies_stage3_formula_simplification) :-
+    ProgramIR = [
+        ir_clause(c1, sum_to_n(0, 0), [], []),
+        ir_clause(c2, sum_to_n(N, S),
+            [N > 0, N1 is N - 1, sum_to_n(N1, S1), S is S1 + N],
+            [])
+    ],
+    optimise_program(ProgramIR, OptimisedIR, optimisation_report(Report)),
+    include(sum_to_n_clause, OptimisedIR, SumClauses),
+    assertion(length(SumClauses, 1)),
+    assertion(member(formula_discovered(sum_to_n/2, n_times_n_plus_1_over_2), Report)).
+
+sum_to_n_clause(ir_clause(_, Head, _, _)) :-
+    functor(Head, sum_to_n, 2).
+
+bad_sum_clause(ir_clause(_, Head, _, _)) :-
+    functor(Head, bad_sum, 2).
+
+:- end_tests(simplify).
