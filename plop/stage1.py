@@ -40,6 +40,7 @@ SUBTERM_GOALS = {"arg", "nth0", "nth1"}
 NONDET_GOALS = ENUMERATOR_GOALS | {"repeat"}
 AGGREGATE_GOALS = {"bagof", "findall", "setof"}
 VAR_PATTERN = re.compile(r"\b([A-Z_][A-Za-z0-9_]*)\b")
+TOP_LEVEL_OPERATORS = ("=:=", "=\\=", ">=", "=<", " is ", ">", "<", ";")
 
 
 @dataclass(frozen=True)
@@ -153,6 +154,60 @@ def goal_signature(goal: str) -> str | None:
     return None
 
 
+def contains_top_level_token(text: str, token: str) -> bool:
+    depth_paren = depth_list = depth_brace = 0
+    in_single = False
+    in_double = False
+    i = 0
+    while i < len(text):
+        char = text[i]
+        if char == "'" and not in_double:
+            in_single = not in_single
+        elif char == '"' and not in_single:
+            in_double = not in_double
+        elif not in_single and not in_double:
+            if char == "(":
+                depth_paren += 1
+            elif char == ")":
+                depth_paren -= 1
+            elif char == "[":
+                depth_list += 1
+            elif char == "]":
+                depth_list -= 1
+            elif char == "{":
+                depth_brace += 1
+            elif char == "}":
+                depth_brace -= 1
+            elif (
+                depth_paren == 0
+                and depth_list == 0
+                and depth_brace == 0
+                and text[i : i + len(token)] == token
+            ):
+                return True
+        i += 1
+    return False
+
+
+def is_operator_goal(goal: str, operators: tuple[str, ...]) -> bool:
+    return any(contains_top_level_token(goal, operator) for operator in operators)
+
+
+def is_list_literal(fragment: str) -> bool:
+    fragment = fragment.strip()
+    return fragment.startswith("[") and fragment.endswith("]")
+
+
+def is_matrix_literal(fragment: str) -> bool:
+    fragment = fragment.strip()
+    if not is_list_literal(fragment):
+        return False
+    inner = fragment[1:-1].strip()
+    if not inner:
+        return False
+    return any(part.strip().startswith("[") for part in split_top_level(inner, ","))
+
+
 def is_recursive(signature: str, graph: dict[str, set[str]]) -> bool:
     stack = [signature]
     seen: set[str] = set()
@@ -206,21 +261,20 @@ def analyse_clauses(clauses: Iterable[IRClause]) -> dict[str, object]:
                     enumerators.add(name)
                 if name in AGGREGATE_GOALS or name in ENUMERATOR_GOALS:
                     generators.add(name)
-                if any(op in goal for op in (" is ", "=:=", "=\\=", "<", ">", "=<", ">=")):
+                if is_operator_goal(goal, TOP_LEVEL_OPERATORS[:-1]):
                     accumulators.update(var for var in extract_variables(goal) if var in clause.args)
-                if name in LIST_GOALS or "[" in goal or any("[" in arg for arg in clause.args):
+                if name in LIST_GOALS or any(is_list_literal(arg) for arg in ([goal] + clause.args)):
                     list_patterns.add(goal)
                 if (
                     name in MATRIX_GOALS
-                    or "[[" in goal
-                    or any("[[" in arg for arg in clause.args)
+                    or any(is_matrix_literal(arg) for arg in ([goal] + clause.args))
                 ):
                     matrix_patterns.add(goal)
-                if name in NONDET_GOALS or ";" in goal:
+                if name in NONDET_GOALS or contains_top_level_token(goal, ";"):
                     deterministic = False
 
             parsed_goals = [parse_callable(goal) for goal in clause.body]
-            for left, right in zip(parsed_goals, parsed_goals[1:]):
+            for index, (left, right) in enumerate(zip(parsed_goals, parsed_goals[1:])):
                 if left is None or right is None:
                     continue
                 left_name, left_args = left
@@ -228,14 +282,14 @@ def analyse_clauses(clauses: Iterable[IRClause]) -> dict[str, object]:
                 if (
                     left_name in SUBTERM_GOALS
                     and right_name in SUBTERM_GOALS
-                    and left_args
-                    and right_args
+                    and len(left_args) >= 1
+                    and len(right_args) >= 2
                     and left_args[-1] == right_args[1]
                 ):
                     nested_subterm_traversals.append(
                         {
                             "predicate": signature,
-                            "path": [clause.body[parsed_goals.index(left)], clause.body[parsed_goals.index(right)]],
+                            "path": [clause.body[index], clause.body[index + 1]],
                         }
                     )
 
