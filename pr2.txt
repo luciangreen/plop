@@ -1,0 +1,243 @@
+% optimiser_requirements.pl
+
+project(optimiser).
+
+goal(optimiser, simplify_recursive_predicates).
+goal(optimiser, memoise_repeated_computations).
+goal(optimiser, unfold_data_base_up).
+goal(optimiser, convert_recursive_traversals_to_index_loops).
+goal(optimiser, optimise_subterm_address_access).
+goal(optimiser, discover_formulas_with_gaussian_elimination).
+goal(optimiser, splice_single_use_values).
+goal(optimiser, preserve_semantics).
+goal(optimiser, emit_optimised_prolog).
+
+stage(1, parsing_and_analysis).
+stage(2, data_unfolding_and_memoisation).
+stage(3, enumerator_optimisation).
+stage(4, indexical_optimisation).
+stage(5, recursive_index_loop_optimisation).
+stage(6, gaussian_formula_discovery).
+stage(7, shortcut_and_splicing_optimisation).
+stage(8, deterministic_loop_conversion).
+stage(9, symbolic_manual_neuronet_optimisation).
+
+requires(parsing_and_analysis, parse_prolog_source).
+requires(parsing_and_analysis, build_ir_clauses).
+requires(parsing_and_analysis, detect_recursive_predicates).
+requires(parsing_and_analysis, detect_enumerators).
+requires(parsing_and_analysis, detect_accumulators).
+requires(parsing_and_analysis, detect_generators).
+requires(parsing_and_analysis, detect_reusable_variables).
+requires(parsing_and_analysis, detect_list_patterns).
+requires(parsing_and_analysis, detect_matrix_patterns).
+requires(parsing_and_analysis, detect_nested_subterm_traversals).
+
+ir_form(ir_clause(Name, Args, Body)) :-
+    atom(Name),
+    is_list(Args),
+    is_list(Body).
+
+requires(data_unfolding_and_memoisation, unfold_base_up).
+requires(data_unfolding_and_memoisation, memoise_repeated_subcomputations).
+requires(data_unfolding_and_memoisation, load_reused_variables_before_use).
+requires(data_unfolding_and_memoisation, simplify_predicates_to_formulas).
+requires(data_unfolding_and_memoisation, preserve_dependency_order).
+
+example_unfolding(
+    [clause(inc(X,Y), [is(Y, X+1)]),
+     clause(double(X,Y), [is(Y, X*2)])],
+    clause(combined(X,Y), [is(Y, (X+1)*2)])
+).
+
+example_formula_simplification(
+    recursive(sum_to_n(N,S)),
+    formula(S is N*(N+1)//2)
+).
+
+requires(enumerator_optimisation, classify_created_enumerators).
+requires(enumerator_optimisation, classify_removed_enumerators).
+requires(enumerator_optimisation, classify_retained_enumerators).
+requires(enumerator_optimisation, optimise_created_and_removed_enumerators_separately).
+separate_from(enumerator_optimisation, indexical_optimisation).
+
+enumerator_type(created).
+enumerator_type(removed).
+enumerator_type(retained).
+
+requires(indexical_optimisation, record_list_indices).
+requires(indexical_optimisation, record_matrix_indices).
+requires(indexical_optimisation, record_tree_indices).
+requires(indexical_optimisation, record_nested_subterm_addresses).
+requires(indexical_optimisation, map_input_addresses_to_required_outputs).
+requires(indexical_optimisation, construct_only_needed_outputs).
+requires(indexical_optimisation, avoid_unneeded_computation).
+
+address(addr(Path, Value)) :-
+    is_list(Path),
+    nonvar(Value).
+
+example_address(
+    addr([2,1], c),
+    meaning(matrix_item(row(2), column(1), value(c)))
+).
+
+subterm_with_address(Term, Address, Subterm) :-
+    subterm_with_address_(Address, Term, Subterm).
+
+subterm_with_address_([], Term, Term).
+subterm_with_address_([I|Rest], Term, Subterm) :-
+    nth1(I, Term, Child),
+    subterm_with_address_(Rest, Child, Subterm).
+
+example_subterm_address :-
+    subterm_with_address([[a,b],[c,d]], [2,1], c).
+
+requires(recursive_index_loop_optimisation, detect_nested_structures_by_recursion).
+requires(recursive_index_loop_optimisation, convert_recursive_traversal_to_index_loop).
+requires(recursive_index_loop_optimisation, support_lists).
+requires(recursive_index_loop_optimisation, support_matrices).
+requires(recursive_index_loop_optimisation, support_trees).
+requires(recursive_index_loop_optimisation, support_compound_terms).
+requires(recursive_index_loop_optimisation, support_multidimensional_addresses).
+
+example_recursive_index_loop(
+    recursive(walk(Tree, X)),
+    indexed(index_walk(Tree, Address, X))
+).
+
+requires(gaussian_formula_discovery, generate_sequence_samples).
+requires(gaussian_formula_discovery, detect_arithmetic_sequences).
+requires(gaussian_formula_discovery, detect_stepped_sequences).
+requires(gaussian_formula_discovery, detect_polynomial_sequences).
+requires(gaussian_formula_discovery, detect_recursive_numeric_patterns).
+requires(gaussian_formula_discovery, solve_coefficients_with_gaussian_elimination).
+requires(gaussian_formula_discovery, infer_closed_form_formulas).
+requires(gaussian_formula_discovery, replace_loops_with_formulas_when_safe).
+
+sequence_example(arithmetic_plus_one, [1,2,3,4,5], formula(a(N) = N)).
+sequence_example(odd_numbers, [1,3,5,7,9], formula(a(N) = 2*N-1)).
+sequence_example(step_three, [2,5,8,11,14], formula(a(N) = 3*N-1)).
+sequence_example(squares, [1,4,9,16,25], formula(a(N) = N*N)).
+sequence_example(sum_to_n, [1,3,6,10,15], formula(s(N) = N*(N+1)/2)).
+
+gaussian_target(sum_1_to_n, formula(S is N*(N+1)//2)).
+gaussian_target(sum_arithmetic_sequence, formula(S is N*(First+Last)//2)).
+gaussian_target(polynomial_sequence, infer_by_coefficients).
+
+example_gaussian_optimisation(
+    [build_list(N, L), sum_list(L, S)],
+    [S is N*(N+1)//2]
+).
+
+requires(shortcut_and_splicing_optimisation, detect_single_use_values).
+requires(shortcut_and_splicing_optimisation, detect_comparison_only_values).
+requires(shortcut_and_splicing_optimisation, splice_computation_into_use_site).
+requires(shortcut_and_splicing_optimisation, avoid_unnecessary_temporary_variables).
+
+example_splicing(
+    [Temp is X+1, Y is Temp*2],
+    [Y is (X+1)*2]
+).
+
+requires(deterministic_loop_conversion, convert_findall_to_loops).
+requires(deterministic_loop_conversion, flatten_nested_loops).
+requires(deterministic_loop_conversion, splice_nested_loop_outputs).
+requires(deterministic_loop_conversion, reduce_choicepoints).
+requires(deterministic_loop_conversion, preserve_solution_order_where_required).
+
+requires(symbolic_manual_neuronet_optimisation, record_symbolic_input_output_paths).
+requires(symbolic_manual_neuronet_optimisation, infer_address_patterns).
+requires(symbolic_manual_neuronet_optimisation, minimise_data_paths).
+requires(symbolic_manual_neuronet_optimisation, replace_learned_patterns_with_symbolic_rules).
+requires(symbolic_manual_neuronet_optimisation, emit_explainable_neurocode_like_rules).
+
+input_type(standard_swi_prolog_file).
+input_type(recursive_predicate).
+input_type(list_processing_predicate).
+input_type(matrix_processing_predicate).
+input_type(tree_processing_predicate).
+input_type(symbolic_arithmetic_predicate).
+
+output_type(optimised_prolog_file).
+output_type(optimisation_report).
+output_type(detected_formula_report).
+output_type(index_mapping_report).
+output_type(loop_conversion_report).
+output_type(optional_trace).
+
+semantic_rule :-
+    forall(transformation(Input, Output),
+           equivalent(Input, Output)).
+
+safety_requirement(preserve_semantics).
+safety_requirement(only_replace_loop_with_formula_if_verified).
+safety_requirement(retain_original_predicate_if_formula_detection_fails).
+safety_requirement(report_uncertain_optimisations).
+safety_requirement(allow_fallback_to_original_code).
+
+test_case(sum_to_n,
+    input([
+        clause(sum_to_n(0,0), []),
+        clause(sum_to_n(N,S), [
+            N > 0,
+            N1 is N-1,
+            sum_to_n(N1,S1),
+            S is S1+N
+        ])
+    ]),
+    expected_output([
+        clause(sum_to_n(N,S), [
+            S is N*(N+1)//2
+        ])
+    ])
+).
+
+test_case(matrix_lookup,
+    input([
+        nth1(I, Matrix, Row),
+        nth1(J, Row, X)
+    ]),
+    expected_output([
+        addr([I,J], X)
+    ])
+).
+
+test_case(single_use_splice,
+    input([
+        Temp is X+1,
+        Y is Temp*2
+    ]),
+    expected_output([
+        Y is (X+1)*2
+    ])
+).
+
+agent_task(read_repository).
+agent_task(identify_existing_files).
+agent_task(add_optimiser_pipeline).
+agent_task(add_ir_representation).
+agent_task(add_subterm_address_module).
+agent_task(add_gaussian_formula_module).
+agent_task(add_loop_conversion_module).
+agent_task(add_tests).
+agent_task(add_readme_examples).
+agent_task(run_swi_prolog_tests).
+
+github_agent_requirement :-
+    project(optimiser),
+    forall(stage(_, Stage), requires_stage_implementation(Stage)),
+    forall(test_case(Name, _, _), requires_test(Name)),
+    requires_readme,
+    requires_usage_examples,
+    requires_swi_prolog_compatibility.
+
+requires_stage_implementation(Stage) :-
+    atom(Stage).
+
+requires_test(Name) :-
+    atom(Name).
+
+requires_readme.
+requires_usage_examples.
+requires_swi_prolog_compatibility.
