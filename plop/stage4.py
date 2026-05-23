@@ -172,13 +172,13 @@ def analyse_clauses(clauses: list[IRClause]) -> dict[str, object]:
 
     deduped_queries = sorted(set(subterm_with_address_queries))
     deduped_mappings = []
-    seen_mappings: set[tuple[str, str, str, str, str]] = set()
+    seen_mappings: set[tuple[str, str, str, tuple[str, ...], str]] = set()
     for mapping in input_output_address_mappings:
         key = (
             str(mapping["predicate"]),
             str(mapping["kind"]),
             str(mapping["input_term"]),
-            str(tuple(str(part) for part in mapping["address"])),
+            tuple(str(part) for part in mapping["address"]),
             str(mapping["output_term"]),
         )
         if key in seen_mappings:
