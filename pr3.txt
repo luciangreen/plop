@@ -1,0 +1,568 @@
+Optimiser — Complete Prolog Program Requirements
+
+1. Project Goal
+
+Build a SWI-Prolog optimiser named optimiser that reads Prolog source code, analyses it, and rewrites selected predicates into faster, simpler, deterministic Prolog where safe.
+
+The optimiser must be written in Prolog.
+
+It must transform Prolog programs using:
+
+* base-up data unfolding,
+* memoisation,
+* formula simplification,
+* enumerator analysis,
+* indexical optimisation,
+* subterm-address indexing,
+* recursive index-loop conversion,
+* Gaussian elimination formula discovery,
+* shortcut splicing,
+* and deterministic loop generation.
+
+The optimiser must preserve program meaning where it performs a rewrite.
+
+⸻
+
+2. Required Repository Structure
+
+optimiser/
+  README.md
+  optimiser.pl
+  parser.pl
+  ir.pl
+  dependency_graph.pl
+  unfold.pl
+  memoise.pl
+  simplify.pl
+  enumerators.pl
+  indexical.pl
+  subterm_address.pl
+  gaussian.pl
+  formula_discovery.pl
+  loop_conversion.pl
+  splice.pl
+  safety.pl
+  reporter.pl
+  examples/
+    sum_to_n.pl
+    matrix_lookup.pl
+    nested_lists.pl
+    sequence_sum.pl
+  tests/
+    test_optimiser.pl
+
+⸻
+
+3. Main Entry Points
+
+The optimiser must provide:
+
+optimise_file(InputFile, OutputFile).
+optimise_program(ProgramIR, OptimisedIR, Report).
+optimise_predicate(PredicateName/Arity, ProgramIR, OptimisedIR, Report).
+
+Example use:
+
+?- optimise_file('examples/sum_to_n.pl', 'out/sum_to_n_opt.pl').
+
+⸻
+
+4. Parser Requirements
+
+The optimiser must read SWI-Prolog source files and convert clauses into an internal representation.
+
+Required IR:
+
+ir_clause(Id, Head, Body, Metadata).
+
+Example:
+
+ir_clause(c1, sum_to_n(0,0), [], []).
+ir_clause(c2, sum_to_n(N,S),
+    [N > 0, N1 is N-1, sum_to_n(N1,S1), S is S1+N],
+    []).
+
+The parser must support at minimum:
+
+* facts,
+* normal rules,
+* arithmetic using is/2,
+* comparisons,
+* conjunctions,
+* disjunctions as unsupported unless safely handled,
+* list predicates such as member/2, nth0/3, nth1/3,
+* findall/3,
+* recursion,
+* simple accumulator predicates.
+
+Unsupported features must be preserved unchanged and reported.
+
+⸻
+
+5. Dependency Graph Requirements
+
+The optimiser must build a predicate dependency graph.
+
+It must detect:
+
+* predicate calls,
+* recursive predicates,
+* mutually recursive predicates,
+* base cases,
+* accumulator arguments,
+* generated variables,
+* reused variables,
+* input/output argument flow.
+
+Required predicates:
+
+build_dependency_graph(ProgramIR, Graph).
+recursive_predicate(Graph, Name/Arity).
+base_case(ProgramIR, Name/Arity, ClauseId).
+
+⸻
+
+6. Stage 1 — Base-Up Data Unfolding
+
+The optimiser must unfold simple predicates into callers where safe.
+
+It should start from base-level predicates and work upward through the dependency graph.
+
+Example input:
+
+inc(X,Y) :- Y is X+1.
+double(X,Y) :- Y is X*2.
+combined(X,Y) :- inc(X,A), double(A,Y).
+
+Expected output:
+
+combined(X,Y) :- Y is (X+1)*2.
+
+The optimiser must avoid unfolding:
+
+* recursive calls unless part of a recognised pattern,
+* predicates with side effects,
+* predicates with cuts,
+* predicates using I/O,
+* unsafe meta-calls.
+
+⸻
+
+7. Stage 2 — Memoisation
+
+The optimiser must detect repeated computations.
+
+Example:
+
+p(X,Y,Z) :-
+    expensive(X,A),
+    expensive(X,B),
+    Y is A+1,
+    Z is B+2.
+
+May become:
+
+p(X,Y,Z) :-
+    expensive(X,A),
+    Y is A+1,
+    Z is A+2.
+
+For recursive predicates such as Fibonacci, it may generate memoised helper predicates when safe:
+
+memo_fib(N,F).
+
+Memoisation must be optional and reported.
+
+⸻
+
+8. Stage 3 — Predicate-to-Formula Simplification
+
+The optimiser must recognise recursive numeric predicates and replace them with formulas where verified.
+
+Required example:
+
+sum_to_n(0,0).
+sum_to_n(N,S) :-
+    N > 0,
+    N1 is N-1,
+    sum_to_n(N1,S1),
+    S is S1+N.
+
+Expected output:
+
+sum_to_n(N,S) :-
+    S is N*(N+1)//2.
+
+Formula replacement must only occur after testing generated samples against the original predicate.
+
+⸻
+
+9. Stage 4 — Enumerator Analysis
+
+The optimiser must classify enumerators as:
+
+created
+removed
+retained
+
+It must analyse predicates such as:
+
+between/3
+member/2
+nth0/3
+nth1/3
+findall/3
+
+It must distinguish enumerator optimisation from indexical optimisation.
+
+Example:
+
+findall(I, between(1,N,I), L),
+sum_list(L,S)
+
+may become:
+
+S is N*(N+1)//2
+
+⸻
+
+10. Stage 5 — Indexical Optimisation
+
+The optimiser must record list, matrix, and nested term indices.
+
+It must detect patterns such as:
+
+nth1(I, Matrix, Row),
+nth1(J, Row, X)
+
+and represent them internally as:
+
+addr([I,J], X)
+
+It must use this to generate direct access or direct output construction.
+
+⸻
+
+11. Stage 6 — Subterm Address System
+
+Implement:
+
+subterm_with_address(+Term, +Address, -Subterm).
+subterm_addresses(+Term, -Pairs).
+
+Example:
+
+?- subterm_with_address([[a,b],[c,d]], [2,1], X).
+X = c.
+
+The system must support:
+
+* lists,
+* nested lists,
+* compound terms,
+* tree-like structures,
+* matrix-style addressing.
+
+⸻
+
+12. Stage 7 — Recursive Index Loop Optimisation
+
+The optimiser must detect nested structures discovered by recursion.
+
+Example:
+
+walk_tree(Tree, X)
+
+may be analysed into address/value pairs:
+
+addr([1,2,1], X)
+
+It must then construct only the required outputs where possible.
+
+Instead of traversing all data, it may generate:
+
+needed_subterms(Term, Addresses, Values).
+
+⸻
+
+13. Stage 8 — Gaussian Elimination Formula Discovery
+
+The optimiser must use Gaussian elimination to infer formulas from numeric sequences.
+
+It must detect:
+
+1,2,3,4,5
+
+as:
+
+A(N) = N
+
+Detect:
+
+1,3,5,7,9
+
+as:
+
+A(N) = 2*N-1
+
+Detect cumulative sums:
+
+1,3,6,10,15
+
+as:
+
+S(N) = N*(N+1)/2
+
+Required predicates:
+
+fit_polynomial(+Samples, +Degree, -Formula).
+gaussian_eliminate(+Matrix, -ReducedMatrix).
+infer_sequence_formula(+Samples, -Formula).
+verify_formula(+OriginalPredicate, +Formula, +TestRange).
+
+⸻
+
+14. Stage 9 — List-Manipulation-to-Formula Optimisation
+
+The optimiser must detect when unfolded list operations generate a numeric series.
+
+Example:
+
+build_1_to_n(N,L),
+sum_list(L,S)
+
+must become:
+
+S is N*(N+1)//2.
+
+Example:
+
+build_sequence(N, Start, Step, L),
+sum_list(L, S)
+
+may become:
+
+S is N*(2*Start + (N-1)*Step)//2.
+
+⸻
+
+15. Stage 10 — Shortcut and Splicing Optimisation
+
+The optimiser must detect values used once and splice them into their use site.
+
+Example:
+
+A is X+1,
+Y is A*2
+
+becomes:
+
+Y is (X+1)*2
+
+It must avoid unsafe splicing when:
+
+* the variable is used more than once,
+* the computation has side effects,
+* the expression may change instantiation order incorrectly.
+
+⸻
+
+16. Stage 11 — Deterministic Loop Conversion
+
+The optimiser must convert simple nondeterministic enumeration into deterministic loops where safe.
+
+Required support:
+
+findall/3
+member/2
+between/3
+nth0/3
+nth1/3
+
+Example:
+
+findall(Y, (member(X,L), process(X,Y)), Ys)
+
+may become a deterministic recursive loop:
+
+process_list([], []).
+process_list([X|Xs], [Y|Ys]) :-
+    process(X,Y),
+    process_list(Xs,Ys).
+
+⸻
+
+17. Safety Requirements
+
+Every optimisation must be marked as:
+
+safe
+unsafe
+unknown
+
+The optimiser must not rewrite code marked unsafe or unknown unless a debug/experimental flag is enabled.
+
+Safety checks must include:
+
+* variable scope preservation,
+* determinism preservation where required,
+* no side effects moved across calls,
+* no cuts moved or removed,
+* no I/O rewritten,
+* sample-based formula verification,
+* fallback to original code if unsure.
+
+⸻
+
+18. Reporting Requirements
+
+The optimiser must generate a report containing:
+
+optimisation_report([
+    unfolded(Predicate),
+    memoised(Predicate),
+    formula_discovered(Predicate, Formula),
+    indexical_mapping(Predicate, Mapping),
+    loop_converted(Predicate),
+    skipped(Predicate, Reason)
+]).
+
+The report must be printable as text.
+
+⸻
+
+19. Required Examples
+
+Example 1 — Sum to N
+
+Input:
+
+sum_to_n(0,0).
+sum_to_n(N,S) :-
+    N > 0,
+    N1 is N-1,
+    sum_to_n(N1,S1),
+    S is S1+N.
+
+Output:
+
+sum_to_n(N,S) :-
+    S is N*(N+1)//2.
+
+Example 2 — Matrix Lookup
+
+Input:
+
+lookup(Matrix,I,J,X) :-
+    nth1(I,Matrix,Row),
+    nth1(J,Row,X).
+
+Output may include internal mapping:
+
+addr([I,J], X)
+
+Example 3 — Sequence Sum
+
+Input:
+
+seq_sum(N,S) :-
+    findall(I, between(1,N,I), L),
+    sum_list(L,S).
+
+Output:
+
+seq_sum(N,S) :-
+    S is N*(N+1)//2.
+
+Example 4 — Splicing
+
+Input:
+
+p(X,Y) :-
+    A is X+1,
+    Y is A*2.
+
+Output:
+
+p(X,Y) :-
+    Y is (X+1)*2.
+
+⸻
+
+20. Testing Requirements
+
+Tests must be written using plunit.
+
+Required test groups:
+
+:- begin_tests(parser).
+:- begin_tests(unfold).
+:- begin_tests(memoise).
+:- begin_tests(indexical).
+:- begin_tests(subterm_address).
+:- begin_tests(gaussian).
+:- begin_tests(formula_discovery).
+:- begin_tests(loop_conversion).
+:- begin_tests(splice).
+:- begin_tests(safety).
+:- end_tests.
+
+Run with:
+
+swipl -q -s tests/test_optimiser.pl -g run_tests -t halt
+
+⸻
+
+21. Minimum Working Version
+
+The first complete version must support:
+
+* reading a Prolog file,
+* parsing clauses into IR,
+* optimising sum_to_n/2,
+* optimising build_1_to_n + sum_list,
+* detecting matrix-style nth1/nth1 indexing,
+* supporting subterm_with_address/3,
+* performing simple Gaussian polynomial fitting,
+* performing single-use arithmetic splicing,
+* producing an output Prolog file,
+* producing an optimisation report,
+* running tests.
+
+⸻
+
+22. Non-Goals for Version 1
+
+Version 1 does not need to support:
+
+* full ISO Prolog,
+* cuts,
+* negation,
+* DCGs,
+* modules beyond simple files,
+* constraints,
+* tabling,
+* meta-predicates,
+* destructive updates,
+* I/O optimisation,
+* impure predicates,
+* complete semantic theorem proving.
+
+These should be preserved unchanged.
+
+⸻
+
+23. Final Success Criteria
+
+The optimiser is complete when this command works:
+
+swipl -q -s optimiser.pl -g "optimise_file('examples/sum_to_n.pl','out/sum_to_n_opt.pl')" -t halt
+
+and produces:
+
+sum_to_n(N,S) :-
+    S is N*(N+1)//2.
+
+with a report saying:
+
+formula_discovered(sum_to_n/2, n_times_n_plus_1_over_2).
