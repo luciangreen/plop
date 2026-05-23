@@ -150,3 +150,53 @@ bad_sum_clause(ir_clause(_, Head, _, _)) :-
     functor(Head, bad_sum, 2).
 
 :- end_tests(simplify).
+
+:- begin_tests(enumerators).
+
+:- use_module('../optimiser').
+:- use_module('../enumerators').
+
+test(classifies_retained_enumerator) :-
+    ProgramIR = [
+        ir_clause(c1, p(N, S), [between(1, N, I), S is I], [])
+    ],
+    analyse_enumerators(ProgramIR, ProgramIR, Report),
+    assertion(member(enumerator(retained, p/2, between/3), Report)).
+
+test(classifies_removed_enumerators) :-
+    BeforeIR = [
+        ir_clause(c1, seq_sum(N, S), [findall(I, between(1, N, I), L), sum_list(L, S)], [])
+    ],
+    AfterIR = [
+        ir_clause(c2, seq_sum(N, S), [S is N * (N + 1) // 2], [])
+    ],
+    analyse_enumerators(BeforeIR, AfterIR, Report),
+    assertion(member(enumerator(removed, seq_sum/2, between/3), Report)),
+    assertion(member(enumerator(removed, seq_sum/2, findall/3), Report)).
+
+test(classifies_created_enumerator) :-
+    BeforeIR = [
+        ir_clause(c1, p(_), [], [])
+    ],
+    AfterIR = [
+        ir_clause(c2, p(X), [member(X, [1, 2, 3])], [])
+    ],
+    analyse_enumerators(BeforeIR, AfterIR, Report),
+    assertion(member(enumerator(created, p/1, member/2), Report)).
+
+test(distinguishes_indexical_patterns_from_enumerators) :-
+    ProgramIR = [
+        ir_clause(c1, lookup(Matrix, I, J, X), [nth1(I, Matrix, Row), nth1(J, Row, X)], [])
+    ],
+    analyse_enumerators(ProgramIR, ProgramIR, Report),
+    assertion(member(indexical_candidate(lookup/4, nth1/3), Report)),
+    assertion(\+ member(enumerator(_, lookup/4, nth1/3), Report)).
+
+test(optimise_program_includes_stage4_report_items) :-
+    ProgramIR = [
+        ir_clause(c1, p(X), [member(X, [a, b, c])], [])
+    ],
+    optimise_program(ProgramIR, _OptimisedIR, optimisation_report(Report)),
+    assertion(member(enumerator(retained, p/1, member/2), Report)).
+
+:- end_tests(enumerators).
