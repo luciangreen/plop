@@ -41,6 +41,7 @@ NONDET_GOALS = ENUMERATOR_GOALS | {"repeat"}
 AGGREGATE_GOALS = {"bagof", "findall", "setof"}
 VAR_PATTERN = re.compile(r"\b([A-Z_][A-Za-z0-9_]*)\b")
 TOP_LEVEL_OPERATORS = ("=:=", "=\\=", ">=", "=<", " is ", ">", "<", ";")
+ACCUMULATOR_OPERATORS = TOP_LEVEL_OPERATORS[:-1]
 
 
 @dataclass(frozen=True)
@@ -261,20 +262,23 @@ def analyse_clauses(clauses: Iterable[IRClause]) -> dict[str, object]:
                     enumerators.add(name)
                 if name in AGGREGATE_GOALS or name in ENUMERATOR_GOALS:
                     generators.add(name)
-                if is_operator_goal(goal, TOP_LEVEL_OPERATORS[:-1]):
+                goal_args = parsed_goal[1] if parsed_goal is not None else []
+                if is_operator_goal(goal, ACCUMULATOR_OPERATORS):
                     accumulators.update(var for var in extract_variables(goal) if var in clause.args)
-                if name in LIST_GOALS or any(is_list_literal(arg) for arg in ([goal] + clause.args)):
+                if name in LIST_GOALS or any(
+                    is_list_literal(arg) for arg in (goal_args + clause.args)
+                ):
                     list_patterns.add(goal)
                 if (
                     name in MATRIX_GOALS
-                    or any(is_matrix_literal(arg) for arg in ([goal] + clause.args))
+                    or any(is_matrix_literal(arg) for arg in (goal_args + clause.args))
                 ):
                     matrix_patterns.add(goal)
                 if name in NONDET_GOALS or contains_top_level_token(goal, ";"):
                     deterministic = False
 
-            parsed_goals = [parse_callable(goal) for goal in clause.body]
-            for index, (left, right) in enumerate(zip(parsed_goals, parsed_goals[1:])):
+            parsed_goals = [(index, parse_callable(goal)) for index, goal in enumerate(clause.body)]
+            for (left_index, left), (right_index, right) in zip(parsed_goals, parsed_goals[1:]):
                 if left is None or right is None:
                     continue
                 left_name, left_args = left
@@ -289,7 +293,7 @@ def analyse_clauses(clauses: Iterable[IRClause]) -> dict[str, object]:
                     nested_subterm_traversals.append(
                         {
                             "predicate": signature,
-                            "path": [clause.body[index], clause.body[index + 1]],
+                            "path": [clause.body[left_index], clause.body[right_index]],
                         }
                     )
 
