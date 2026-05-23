@@ -15,7 +15,7 @@ def _index_base(goal_name: str) -> int:
 
 
 def _sorted_dicts(rows: list[dict[str, object]], keys: tuple[str, ...]) -> list[dict[str, object]]:
-    return sorted(rows, key=lambda row: tuple(str(row[key]) for key in keys))
+    return sorted(rows, key=lambda row: tuple(str(row.get(key, "")) for key in keys))
 
 
 def _join_address(parts: list[str]) -> str:
@@ -178,7 +178,7 @@ def analyse_clauses(clauses: list[IRClause]) -> dict[str, object]:
             str(mapping["predicate"]),
             str(mapping["kind"]),
             str(mapping["input_term"]),
-            ",".join(str(part) for part in mapping["address"]),
+            str(tuple(str(part) for part in mapping["address"])),
             str(mapping["output_term"]),
         )
         if key in seen_mappings:
