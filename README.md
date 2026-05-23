@@ -41,3 +41,16 @@ Stage 3 extends the report with enumerator optimisation signals by classifying e
 - retained enumerators.
 
 The default CLI now runs the stage 3 pass and includes stage 1 + stage 2 output plus a `stage3` section.
+
+## Stage 4
+
+Stage 4 extends the report with indexical optimisation signals by recording symbolic addresses and direct input-to-output mappings across:
+
+- list indices,
+- matrix indices,
+- tree indices,
+- nested subterm positions.
+
+It also emits `subterm_with_address(...)` query forms and `addr(...)` rewrite candidates for index-based access.
+
+The default CLI now runs the stage 4 pass and includes stage 1 + stage 2 + stage 3 output plus a `stage4` section.
