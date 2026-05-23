@@ -89,7 +89,7 @@ def analyse_file(path: str | Path) -> dict[str, object]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Run stage 3 enumerator optimisation analysis on a Prolog source file.")
+    parser = argparse.ArgumentParser(description="Run stage 3 enumerator optimization analysis on a Prolog source file.")
     parser.add_argument("path", help="Path to a Prolog source file")
     parser.add_argument("--indent", type=int, default=2, help="JSON indentation")
     args = parser.parse_args(argv)
