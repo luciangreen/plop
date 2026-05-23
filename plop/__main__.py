@@ -1,4 +1,4 @@
-from .stage2 import main
+from .stage3 import main
 
 
 if __name__ == "__main__":
