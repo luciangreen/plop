@@ -125,7 +125,7 @@ def analyse_clauses(clauses: list[IRClause]) -> dict[str, object]:
                     addr_rewrites.append(
                         {
                             "predicate": clause.signature,
-                            "addr": f"addr([{','.join(address)}],{output_term})",
+                            "addr": f"addr({_join_address(address)},{output_term})",
                         }
                     )
                     input_output_address_mappings.append(
