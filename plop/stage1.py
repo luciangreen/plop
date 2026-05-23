@@ -15,8 +15,8 @@ class IRClause:
     """Simple stage-1 IR clause."""
 
     name: str
-    args: list[str]
-    body: list[str]
+    args: tuple[str, ...]
+    body: tuple[str, ...]
     raw: str
 
 
@@ -87,8 +87,8 @@ def build_ir_clauses(raw_clauses: Iterable[str]) -> list[IRClause]:
             continue
         name = head_match.group(1)
         arg_blob = head_match.group(2)
-        args = _split_top_level(arg_blob, ",") if arg_blob else []
-        body = _split_top_level(body_text, ",") if body_text else []
+        args = tuple(_split_top_level(arg_blob, ",")) if arg_blob else ()
+        body = tuple(_split_top_level(body_text, ",")) if body_text else ()
         ir.append(IRClause(name=name, args=args, body=body, raw=clause_text))
     return ir
 
@@ -163,10 +163,10 @@ def detect_matrix_patterns(ir_clauses: Iterable[IRClause]) -> list[str]:
         for goal in clause.body:
             call = _predicate_signature(goal)
             if call and call[0] == "nth1":
-                args = _split_top_level(call_args(goal), ",")
-                if len(args) >= 3:
-                    source = args[1].strip()
-                    row = args[2].strip()
+                nth1_args = _split_top_level(call_args(goal), ",")
+                if len(nth1_args) >= 3:
+                    source = nth1_args[1].strip()
+                    row = nth1_args[2].strip()
                     if previous_row_var and source == previous_row_var:
                         has_nested_nth1 = True
                     previous_row_var = row
@@ -189,9 +189,13 @@ def detect_nested_subterm_traversals(ir_clauses: Iterable[IRClause]) -> list[str
             if not first_call or not second_call:
                 continue
             if first_call[0] in {"nth1", "arg"} and second_call[0] in {"nth1", "arg"}:
-                first_args = _split_top_level(call_args(clause.body[idx]), ",")
-                second_args = _split_top_level(call_args(clause.body[idx + 1]), ",")
-                if len(first_args) >= 3 and len(second_args) >= 2 and first_args[2].strip() == second_args[1].strip():
+                first_call_args = _split_top_level(call_args(clause.body[idx]), ",")
+                second_call_args = _split_top_level(call_args(clause.body[idx + 1]), ",")
+                if (
+                    len(first_call_args) >= 3
+                    and len(second_call_args) >= 2
+                    and first_call_args[2].strip() == second_call_args[1].strip()
+                ):
                     matches.add(f"{clause.name}/{len(clause.args)}")
     return sorted(matches)
 

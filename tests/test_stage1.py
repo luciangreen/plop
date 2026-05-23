@@ -29,7 +29,7 @@ class Stage1Tests(unittest.TestCase):
         self.assertGreaterEqual(len(clauses), 5)
         ir = build_ir_clauses(clauses)
         self.assertEqual(ir[0].name, "sum_to_n")
-        self.assertEqual(ir[0].args, ["0", "SumAcc"])
+        self.assertEqual(ir[0].args, ("0", "SumAcc"))
 
     def test_stage1_analysis(self) -> None:
         report = analyze_stage1(SOURCE)
