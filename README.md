@@ -19,3 +19,15 @@ python -m plop /path/to/source.pl
 ```
 
 The command prints a JSON report containing the internal representation and detected structural features.
+
+## Stage 2
+
+Stage 2 extends the report with:
+
+- direct arithmetic formula detection,
+- simple recursive sum-to-formula simplification,
+- base-up unfolding of arithmetic helper predicates,
+- memoisation candidates for recursive predicates,
+- repeated subcomputation and variable-reuse signals.
+
+The default CLI now runs the stage 2 pass and includes the stage 1 report alongside a `stage2` section.
