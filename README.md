@@ -31,3 +31,13 @@ Stage 2 extends the report with:
 - repeated subcomputation and variable-reuse signals.
 
 The default CLI now runs the stage 2 pass and includes the stage 1 report alongside a `stage2` section.
+
+## Stage 3
+
+Stage 3 extends the report with enumerator optimisation signals by classifying enumerators as:
+
+- created enumerators,
+- removed enumerators,
+- retained enumerators.
+
+The default CLI now runs the stage 3 pass and includes stage 1 + stage 2 output plus a `stage3` section.
