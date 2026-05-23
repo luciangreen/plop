@@ -151,6 +151,44 @@ bad_sum_clause(ir_clause(_, Head, _, _)) :-
 
 :- end_tests(simplify).
 
+:- begin_tests(indexical).
+
+:- use_module('../optimiser').
+:- use_module('../indexical').
+
+test(detects_matrix_style_nth1_chain) :-
+    ProgramIR = [
+        ir_clause(c1, lookup(Matrix, I, J, X), [nth1(I, Matrix, Row), nth1(J, Row, X)], [])
+    ],
+    optimise_indexicals(ProgramIR, OptimisedIR, Report),
+    assertion(OptimisedIR = ProgramIR),
+    assertion(member(indexical_mapping(lookup/4, addr([I, J], X)), Report)).
+
+test(detects_nested_nth0_chain) :-
+    ProgramIR = [
+        ir_clause(c1, value(Term, I, J, K, X),
+            [nth0(I, Term, A), nth0(J, A, B), nth0(K, B, X)],
+            [])
+    ],
+    optimise_indexicals(ProgramIR, _OptimisedIR, Report),
+    assertion(member(indexical_mapping(value/5, addr([I, J, K], X)), Report)).
+
+test(optimise_program_includes_stage5_report_items) :-
+    ProgramIR = [
+        ir_clause(c1, lookup(Matrix, I, J, X), [nth1(I, Matrix, Row), nth1(J, Row, X)], [])
+    ],
+    optimise_program(ProgramIR, _OptimisedIR, optimisation_report(Report)),
+    assertion(member(indexical_mapping(lookup/4, addr([I, J], X)), Report)).
+
+test(does_not_emit_mapping_for_single_level_nth) :-
+    ProgramIR = [
+        ir_clause(c1, row(Matrix, I, Row), [nth1(I, Matrix, Row)], [])
+    ],
+    optimise_indexicals(ProgramIR, _OptimisedIR, Report),
+    assertion(Report = []).
+
+:- end_tests(indexical).
+
 :- begin_tests(enumerators).
 
 :- use_module('../optimiser').
