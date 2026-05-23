@@ -3,6 +3,7 @@
 :- use_module(parser).
 :- use_module(unfold).
 :- use_module(memoise).
+:- use_module(simplify).
 
 optimise_file(InputFile, OutputFile) :-
     parse_file(InputFile, ProgramIR),
@@ -11,13 +12,17 @@ optimise_file(InputFile, OutputFile) :-
 
 optimise_program(ProgramIR, OptimisedIR, optimisation_report(Items)) :-
     unfold_program(ProgramIR, UnfoldedIR, UnfoldItems),
-    memoise_program(UnfoldedIR, OptimisedIR, MemoItems),
-    append(UnfoldItems, MemoItems, Items).
+    memoise_program(UnfoldedIR, MemoisedIR, MemoItems),
+    simplify_program(MemoisedIR, OptimisedIR, SimplifyItems),
+    append(UnfoldItems, MemoItems, Items0),
+    append(Items0, SimplifyItems, Items).
 
 optimise_predicate(PredicateNameArity, ProgramIR, OptimisedIR, optimisation_report(Items)) :-
     unfold_predicate(PredicateNameArity, ProgramIR, UnfoldedIR, UnfoldItems),
-    memoise_program(UnfoldedIR, OptimisedIR, MemoItems),
-    append(UnfoldItems, MemoItems, Items).
+    memoise_program(UnfoldedIR, MemoisedIR, MemoItems),
+    simplify_program(MemoisedIR, OptimisedIR, SimplifyItems),
+    append(UnfoldItems, MemoItems, Items0),
+    append(Items0, SimplifyItems, Items).
 
 write_program(OutputPath, ProgramIR) :-
     setup_call_cleanup(
