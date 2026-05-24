@@ -49,7 +49,7 @@ sum_to_n(N,S) :-
 
 ```prolog
 ?- needed_subterms(tree(tree(leaf(a), branch(b, c)), branch(d, e)),
-                   [[1,2,1],[2,2]],
+                   [[1, 2, 1], [2, 2]],
                    Values).
 Values = [b, e].
 ```
