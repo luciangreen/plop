@@ -338,14 +338,14 @@ test(infer_sequence_formula_finds_lowest_degree_match) :-
     assertion(Formula = (2 * n - 1)).
 
 test(verify_formula_accepts_matching_sequence_predicate) :-
-    verify_formula(sequence_triangular, n * (n + 1) / 2, 1-5).
+    verify_formula(test_sequence_triangular, n * (n + 1) / 2, 1-5).
 
 test(verify_formula_rejects_wrong_formula, [fail]) :-
-    verify_formula(sequence_identity, 2 * n - 1, 1-5).
+    verify_formula(test_sequence_identity, 2 * n - 1, 1-5).
 
-sequence_triangular(N, Value) :-
+test_sequence_triangular(N, Value) :-
     Value is N * (N + 1) / 2.
 
-sequence_identity(N, N).
+test_sequence_identity(N, N).
 
 :- end_tests(formula_discovery).
