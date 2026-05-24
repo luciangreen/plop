@@ -36,6 +36,18 @@ rewrite_list_sum_pattern(Head, Body, OptimisedBody, arithmetic_progression_sum) 
 predicate_from_head(Head, Name/Arity) :-
     functor(Head, Name, Arity).
 
+% term_contains_var(+Var, +Term)
+%
+% True if Term syntactically contains the variable Var (identity check).
+term_contains_var(Var, Term) :-
+    (   var(Term)
+    ->  Var == Term
+    ;   compound(Term),
+        Term =.. [_ | Args],
+        member(Arg, Args),
+        term_contains_var(Var, Arg)
+    ).
+
 variable_occurrences_in_goals(Var, Goals, Count) :-
     occurrences_in_goals(Var, Goals, Count).
 

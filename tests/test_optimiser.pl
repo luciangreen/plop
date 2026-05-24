@@ -402,3 +402,53 @@ test_sequence_triangular(N, Value) :-
 test_sequence_identity(N, N).
 
 :- end_tests(formula_discovery).
+
+:- begin_tests(splice).
+
+:- use_module('../optimiser').
+:- use_module('../splice').
+
+test(splices_single_use_arithmetic_variable) :-
+    ProgramIR = [
+        ir_clause(c1, p(X, Y), [(A is X + 1), (Y is A * 2)], [])
+    ],
+    splice_program(ProgramIR, OptimisedIR, Report),
+    member(ir_clause(_, p(_, _), Body, _), OptimisedIR),
+    assertion(Body = [Y is (X + 1) * 2]),
+    assertion(member(spliced(p/2), Report)).
+
+test(splices_chain_of_single_use_variables) :-
+    ProgramIR = [
+        ir_clause(c1, q(X, Y), [(A is X + 1), (B is A * 2), (Y is B + 3)], [])
+    ],
+    splice_program(ProgramIR, OptimisedIR, Report),
+    member(ir_clause(_, q(_, _), Body, _), OptimisedIR),
+    assertion(Body = [Y is (X + 1) * 2 + 3]),
+    assertion(member(spliced(q/2), Report)).
+
+test(does_not_splice_multi_use_variable) :-
+    ProgramIR = [
+        ir_clause(c1, p(X, Y, Z), [(A is X + 1), (Y is A * 2), (Z is A + 3)], [])
+    ],
+    splice_program(ProgramIR, OptimisedIR, Report),
+    member(ir_clause(_, p(_, _, _), Body, _), OptimisedIR),
+    assertion(Body = [(A is X + 1), (Y is A * 2), (Z is A + 3)]),
+    assertion(Report = []).
+
+test(does_not_splice_variable_used_in_head) :-
+    ProgramIR = [
+        ir_clause(c1, p(X, A), [(A is X + 1), (writeln(A))], [])
+    ],
+    splice_program(ProgramIR, OptimisedIR, Report),
+    member(ir_clause(_, p(_, _), Body, _), OptimisedIR),
+    assertion(Body = [(A is X + 1), (writeln(A))]),
+    assertion(Report = []).
+
+test(optimise_program_includes_stage10_report_items) :-
+    ProgramIR = [
+        ir_clause(c1, p(X, Y), [(A is X + 1), (Y is A * 2)], [])
+    ],
+    optimise_program(ProgramIR, _OptimisedIR, optimisation_report(Report)),
+    assertion(member(spliced(p/2), Report)).
+
+:- end_tests(splice).

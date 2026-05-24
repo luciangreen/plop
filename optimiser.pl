@@ -8,6 +8,7 @@
 :- use_module(enumerators).
 :- use_module(indexical).
 :- use_module(recursive_index).
+:- use_module(splice).
 
 optimise_file(InputFile, OutputFile) :-
     parse_file(InputFile, ProgramIR),
@@ -20,14 +21,16 @@ optimise_program(ProgramIR, OptimisedIR, optimisation_report(Items)) :-
     simplify_program(MemoisedIR, SimplifiedIR, SimplifyItems),
     optimise_list_formulas(SimplifiedIR, ListFormulaIR, ListFormulaItems),
     optimise_indexicals(ListFormulaIR, IndexicalIR, IndexicalItems),
-    optimise_recursive_index_loops(IndexicalIR, OptimisedIR, RecursiveIndexItems),
+    optimise_recursive_index_loops(IndexicalIR, RecursiveIndexIR, RecursiveIndexItems),
+    splice_program(RecursiveIndexIR, OptimisedIR, SpliceItems),
     analyse_enumerators(ProgramIR, OptimisedIR, EnumeratorItems),
     append(UnfoldItems, MemoItems, Items0),
     append(Items0, SimplifyItems, Items1),
     append(Items1, ListFormulaItems, Items2),
     append(Items2, IndexicalItems, Items3),
     append(Items3, RecursiveIndexItems, Items4),
-    append(Items4, EnumeratorItems, Items).
+    append(Items4, SpliceItems, Items5),
+    append(Items5, EnumeratorItems, Items).
 
 optimise_predicate(PredicateNameArity, ProgramIR, OptimisedIR, optimisation_report(Items)) :-
     unfold_predicate(PredicateNameArity, ProgramIR, UnfoldedIR, UnfoldItems),
@@ -35,14 +38,16 @@ optimise_predicate(PredicateNameArity, ProgramIR, OptimisedIR, optimisation_repo
     simplify_program(MemoisedIR, SimplifiedIR, SimplifyItems),
     optimise_list_formulas(SimplifiedIR, ListFormulaIR, ListFormulaItems),
     optimise_indexicals(ListFormulaIR, IndexicalIR, IndexicalItems),
-    optimise_recursive_index_loops(IndexicalIR, OptimisedIR, RecursiveIndexItems),
+    optimise_recursive_index_loops(IndexicalIR, RecursiveIndexIR, RecursiveIndexItems),
+    splice_program(RecursiveIndexIR, OptimisedIR, SpliceItems),
     analyse_enumerators(ProgramIR, OptimisedIR, EnumeratorItems),
     append(UnfoldItems, MemoItems, Items0),
     append(Items0, SimplifyItems, Items1),
     append(Items1, ListFormulaItems, Items2),
     append(Items2, IndexicalItems, Items3),
     append(Items3, RecursiveIndexItems, Items4),
-    append(Items4, EnumeratorItems, Items).
+    append(Items4, SpliceItems, Items5),
+    append(Items5, EnumeratorItems, Items).
 
 write_program(OutputPath, ProgramIR) :-
     setup_call_cleanup(
