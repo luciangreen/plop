@@ -9,6 +9,7 @@ Implemented stages from `pr3.txt`:
 - Stage 5: indexical mapping analysis
 - Stage 6: subterm address system
 - Stage 7: recursive index-loop analysis with `needed_subterms/3`
+- Stage 8: Gaussian elimination formula discovery
 
 ## Run tests
 
