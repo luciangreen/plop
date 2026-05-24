@@ -13,11 +13,19 @@ Implemented stages from `pr3.txt`:
 - Stage 9: list-manipulation-to-formula optimisation
 - Stage 10: shortcut and splicing optimisation
 - Stage 11: deterministic loop conversion
+- Stage 12: safety classification (`safe` / `unsafe` / `unknown`)
+- Stage 18: optimisation report text rendering (`reporter.pl`)
 
 ## Run tests
 
 ```bash
 swipl -q -s tests/test_optimiser.pl -g run_tests -t halt
+
+## Print optimisation reports
+
+```bash
+swipl -q -s reporter.pl -g "report_text(optimisation_report([unfolded(p/2),skipped(p/2,unknown)]),T),writeln(T)" -t halt
+```
 ```
 
 ## Example — stage 1 (unfolding)
