@@ -131,7 +131,6 @@ side_effect_predicate(maplist/2).
 side_effect_predicate(maplist/3).
 side_effect_predicate(maplist/4).
 side_effect_predicate(aggregate_all/3).
-side_effect_predicate(succ_or_zero/2).
 
 %% has_cut(+Goal) is semidet.
 %

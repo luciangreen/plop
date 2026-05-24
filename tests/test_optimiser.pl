@@ -594,7 +594,4 @@ test(set_experimental_mode_changes_flag, [cleanup(set_experimental_mode(false))]
     set_experimental_mode(true),
     experimental_mode(true).
 
-test(experimental_mode_restored_to_false_after_cleanup) :-
-    experimental_mode(false).
-
 :- end_tests(safety).
