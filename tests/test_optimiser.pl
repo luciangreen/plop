@@ -603,8 +603,8 @@ test(optimise_program_skips_unsafe_rewrite_when_not_experimental, [cleanup(set_e
         ir_clause(c1, seq_sum(N, S), [build_1_to_n(N, L), sum_list(L, S), writeln(S)], [])
     ],
     optimise_list_formulas(ProgramIR, ListFormulaIR, ListFormulaReport),
-    member(ir_clause(_, seq_sum(_, _), ListFormulaBody, _), ListFormulaIR),
-    assertion(ListFormulaBody = [S is N * (N + 1) // 2, writeln(S)]),
+    member(ir_clause(_, seq_sum(_, _), Body0, _), ListFormulaIR),
+    assertion(Body0 = [S is N * (N + 1) // 2, writeln(S)]),
     assertion(member(formula_discovered(seq_sum/2, n_times_n_plus_1_over_2), ListFormulaReport)),
     optimise_program(ProgramIR, OptimisedIR, optimisation_report(Report)),
     member(ir_clause(_, seq_sum(_, _), Body, _), OptimisedIR),
