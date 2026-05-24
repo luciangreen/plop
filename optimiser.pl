@@ -10,6 +10,7 @@
 :- use_module(recursive_index).
 :- use_module(splice).
 :- use_module(loop_conversion).
+:- use_module(safety).
 
 optimise_file(InputFile, OutputFile) :-
     parse_file(InputFile, ProgramIR),
