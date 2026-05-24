@@ -5,12 +5,14 @@
     verify_formula/3
 ]).
 
+:- meta_predicate verify_formula(2, +, +).
+
 fit_polynomial(Samples, Degree, Formula) :-
     valid_degree(Degree),
     length(Samples, SampleCount),
     RequiredSamples is Degree + 1,
     SampleCount >= RequiredSamples,
-    prefix_length(Samples, BasisSamples, RequiredSamples),
+    basis_samples(Samples, RequiredSamples, BasisSamples),
     vandermonde_matrix(BasisSamples, Degree, Matrix),
     gaussian_eliminate(Matrix, ReducedMatrix),
     coefficients_from_reduced(ReducedMatrix, Coefficients),
@@ -46,6 +48,11 @@ verify_formula(OriginalPredicate, Formula, Start-End) :-
 valid_degree(Degree) :-
     integer(Degree),
     Degree >= 0.
+
+basis_samples(Samples, Count, Prefix) :-
+    length(Prefix, Count),
+    append(Prefix, _, Samples),
+    !.
 
 vandermonde_matrix(Samples, Degree, Matrix) :-
     vandermonde_matrix(Samples, Degree, 1, Matrix).
