@@ -304,3 +304,48 @@ test(does_not_report_non_recursive_index_pattern) :-
     assertion(Report = []).
 
 :- end_tests(recursive_index).
+
+:- begin_tests(gaussian).
+
+:- use_module('../gaussian').
+
+test(gaussian_eliminate_reduces_augmented_matrix) :-
+    gaussian_eliminate(
+        [
+            [1, 1, 3],
+            [1, -1, -1]
+        ],
+        Reduced
+    ),
+    assertion(Reduced = [[1, 0, 1], [0, 1, 2]]).
+
+test(fit_polynomial_detects_identity_sequence) :-
+    fit_polynomial([1, 2, 3, 4, 5], 1, Formula),
+    assertion(Formula == n).
+
+test(fit_polynomial_detects_triangular_sequence) :-
+    fit_polynomial([1, 3, 6, 10, 15], 2, Formula),
+    assertion(Formula = (n * (n + 1) / 2)).
+
+:- end_tests(gaussian).
+
+:- begin_tests(formula_discovery).
+
+:- use_module('../formula_discovery').
+
+test(infer_sequence_formula_finds_lowest_degree_match) :-
+    infer_sequence_formula([1, 3, 5, 7, 9], Formula),
+    assertion(Formula = (2 * n - 1)).
+
+test(verify_formula_accepts_matching_sequence_predicate) :-
+    verify_formula(sequence_triangular, n * (n + 1) / 2, 1-5).
+
+test(verify_formula_rejects_wrong_formula, [fail]) :-
+    verify_formula(sequence_identity, 2 * n - 1, 1-5).
+
+sequence_triangular(N, Value) :-
+    Value is N * (N + 1) / 2.
+
+sequence_identity(N, N).
+
+:- end_tests(formula_discovery).
