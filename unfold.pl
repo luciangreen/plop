@@ -33,13 +33,8 @@ unfold_clauses([Clause | Rest], Helpers, [Updated | UpdatedRest], Report0, Repor
     ),
     unfold_clauses(Rest, Helpers, UpdatedRest, Report1, Report).
 
-unfold_clause(ir_clause(Id, Head, Body, Meta), Helpers, ir_clause(Id, Head, SplicedBody, Meta), Changed) :-
-    unfold_body(Body, Helpers, UnfoldedBody, false, ChangedUnfold),
-    splice_arithmetic(UnfoldedBody, SplicedBody),
-    (   ChangedUnfold == true
-    ->  Changed = true
-    ;   Changed = (SplicedBody \== Body)
-    ).
+unfold_clause(ir_clause(Id, Head, Body, Meta), Helpers, ir_clause(Id, Head, UnfoldedBody, Meta), ChangedUnfold) :-
+    unfold_body(Body, Helpers, UnfoldedBody, false, ChangedUnfold).
 
 unfold_body([], _, [], Changed, Changed).
 unfold_body([Goal | Rest], Helpers, UpdatedBody, Changed0, Changed) :-
@@ -102,65 +97,6 @@ clause_predicate(ir_clause(_, Head, _, _), Pred) :-
 clause_predicate_from_goal(Goal, Name/Arity) :-
     callable(Goal),
     functor(Goal, Name, Arity).
-
-splice_arithmetic(Body, Spliced) :-
-    splice_arithmetic_once(Body, Body1),
-    (   Body1 == Body
-    ->  Spliced = Body1
-    ;   splice_arithmetic(Body1, Spliced)
-    ).
-
-splice_arithmetic_once([], []).
-splice_arithmetic_once([Goal | Rest], Result) :-
-    (   Goal = (Var is Expr),
-        var(Var),
-        occurrences_in_goals(Var, Rest, 1),
-        substitute_in_goals(Var, Expr, Rest, NewRest)
-    ->  Result = NewRest
-    ;   Result = [Goal | NewTail],
-        splice_arithmetic_once(Rest, NewTail)
-    ).
-
-occurrences_in_goals(_, [], 0).
-occurrences_in_goals(Var, [Goal | Rest], Count) :-
-    occurrences_in_term(Var, Goal, N1),
-    occurrences_in_goals(Var, Rest, N2),
-    Count is N1 + N2.
-
-occurrences_in_term(Var, Term, Count) :-
-    (   var(Term)
-    ->  (Term == Var -> Count = 1 ; Count = 0)
-    ;   atomic(Term)
-    ->  Count = 0
-    ;   Term =.. [_ | Args],
-        occurrences_in_terms(Var, Args, Count)
-    ).
-
-occurrences_in_terms(_, [], 0).
-occurrences_in_terms(Var, [Term | Rest], Count) :-
-    occurrences_in_term(Var, Term, N1),
-    occurrences_in_terms(Var, Rest, N2),
-    Count is N1 + N2.
-
-substitute_in_goals(_, _, [], []).
-substitute_in_goals(Var, Expr, [Goal | Rest], [NewGoal | NewRest]) :-
-    substitute_term(Var, Expr, Goal, NewGoal),
-    substitute_in_goals(Var, Expr, Rest, NewRest).
-
-substitute_term(Var, Expr, Term, Out) :-
-    (   var(Term)
-    ->  (Term == Var -> Out = Expr ; Out = Term)
-    ;   atomic(Term)
-    ->  Out = Term
-    ;   Term =.. [F | Args],
-        substitute_terms(Var, Expr, Args, NewArgs),
-        Out =.. [F | NewArgs]
-    ).
-
-substitute_terms(_, _, [], []).
-substitute_terms(Var, Expr, [Term | Rest], [NewTerm | NewRest]) :-
-    substitute_term(Var, Expr, Term, NewTerm),
-    substitute_terms(Var, Expr, Rest, NewRest).
 
 unfold_predicate(Pred, ProgramIR, OptimisedIR, Report) :-
     include(clause_matches_predicate_(Pred), ProgramIR, TargetClauses),
