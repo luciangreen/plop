@@ -518,6 +518,9 @@ test(optimise_program_includes_stage10_report_items) :-
 :- begin_tests(safety).
 
 :- use_module('../safety').
+:- use_module('../optimiser').
+:- use_module('../list_formula').
+:- use_module('../memoise').
 
 test(classifies_arithmetic_assignment_as_safe) :-
     classify_goal_safety((_X is _Y + 1), safe).
@@ -593,6 +596,45 @@ test(experimental_mode_defaults_to_false) :-
 test(set_experimental_mode_changes_flag, [cleanup(set_experimental_mode(false))]) :-
     set_experimental_mode(true),
     experimental_mode(true).
+
+test(optimise_program_skips_unsafe_rewrite_when_not_experimental, [cleanup(set_experimental_mode(false))]) :-
+    set_experimental_mode(false),
+    ProgramIR = [
+        ir_clause(c1, seq_sum(N, S), [build_1_to_n(N, L), sum_list(L, S), writeln(S)], [])
+    ],
+    optimise_list_formulas(ProgramIR, ListFormulaIR, ListFormulaReport),
+    member(ir_clause(_, seq_sum(_, _), Body0, _), ListFormulaIR),
+    assertion(Body0 = [S is N * (N + 1) // 2, writeln(S)]),
+    assertion(member(formula_discovered(seq_sum/2, n_times_n_plus_1_over_2), ListFormulaReport)),
+    optimise_program(ProgramIR, OptimisedIR, optimisation_report(Report)),
+    member(ir_clause(_, seq_sum(_, _), Body, _), OptimisedIR),
+    assertion(Body = [build_1_to_n(N, L), sum_list(L, S), writeln(S)]),
+    assertion(member(skipped(seq_sum/2, unsafe), Report)).
+
+test(optimise_program_skips_unknown_rewrite_when_not_experimental, [cleanup(set_experimental_mode(false))]) :-
+    set_experimental_mode(false),
+    ProgramIR = [
+        ir_clause(c1, p(X, Y, Z), [expensive(X, A), expensive(X, B), (Y is A + 1), (Z is B + 2)], [])
+    ],
+    memoise_program(ProgramIR, MemoisedIR, MemoisedReport),
+    member(ir_clause(_, p(_, _, _), MemoisedBody, _), MemoisedIR),
+    assertion(MemoisedBody = [expensive(X, A), (Y is A + 1), (Z is A + 2)]),
+    assertion(member(memoised(p/3), MemoisedReport)),
+    optimise_program(ProgramIR, OptimisedIR, optimisation_report(Report)),
+    member(ir_clause(_, p(_, _, _), Body, _), OptimisedIR),
+    assertion(Body = [expensive(X, A), expensive(X, B), (Y is A + 1), (Z is B + 2)]),
+    assertion(member(skipped(p/3, unknown), Report)).
+
+test(optimise_program_allows_unsafe_and_unknown_in_experimental_mode, [cleanup(set_experimental_mode(false))]) :-
+    set_experimental_mode(true),
+    ProgramIR = [
+        ir_clause(c1, p(X, Y, Z), [expensive(X, A), expensive(X, B), (Y is A + 1), (Z is B + 2)], [])
+    ],
+    optimise_program(ProgramIR, OptimisedIR, optimisation_report(Report)),
+    member(ir_clause(_, p(_, _, _), Body, _), OptimisedIR),
+    assertion(Body = [expensive(X, A), (Y is A + 1), (Z is A + 2)]),
+    assertion(member(memoised(p/3), Report)),
+    assertion(\+ member(skipped(p/3, _), Report)).
 
 :- end_tests(safety).
 
