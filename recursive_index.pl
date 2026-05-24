@@ -20,6 +20,8 @@ needed_subterms_([Address | RestAddresses], Term, [Value | RestValues]) :-
     subterm_with_address(Term, Address, Value),
     needed_subterms_(RestAddresses, Term, RestValues).
 
+% Combines one recursive descent step with one base-case extraction to
+% produce a concrete address candidate for recursive traversal patterns.
 recursive_index_candidate(ProgramIR, Pred, Address, Value) :-
     member(RecursiveClause, ProgramIR),
     recursive_index_step(RecursiveClause, Pred, StepAddress, Value),
@@ -28,6 +30,8 @@ recursive_index_candidate(ProgramIR, Pred, Address, Value) :-
     recursive_index_base(BaseClause, Pred, BaseAddress, Value),
     append(StepAddress, BaseAddress, Address).
 
+% Matches recursive clauses that descend through the first argument while
+% passing the remaining arguments through unchanged.
 recursive_index_step(ir_clause(_, Head, [RecursiveGoal], _), Name/Arity, StepAddress, Value) :-
     functor(Head, Name, Arity),
     Arity >= 2,
@@ -40,6 +44,8 @@ recursive_index_step(ir_clause(_, Head, [RecursiveGoal], _), Name/Arity, StepAdd
     unique_variable_address(Root, Child, StepAddress),
     StepAddress \= [].
 
+% Matches base clauses that recover an output variable from a unique
+% address inside the first argument without further recursion.
 recursive_index_base(ir_clause(_, Head, [], _), Name/Arity, BaseAddress, Value) :-
     functor(Head, Name, Arity),
     Arity >= 2,
@@ -56,6 +62,8 @@ preserved_recursive_tail([HeadArg | HeadRest], [GoalArg | GoalRest]) :-
     HeadArg == GoalArg,
     preserved_recursive_tail(HeadRest, GoalRest).
 
+% Finds the single address at which Var occurs in Term; fails when the
+% variable does not appear exactly once.
 unique_variable_address(Term, Var, Address) :-
     findall(Path, variable_address(Term, Var, [], Path), Paths),
     single_address(Paths, Address).
