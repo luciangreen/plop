@@ -514,3 +514,87 @@ test(optimise_program_includes_stage10_report_items) :-
     assertion(member(spliced(p/2), Report)).
 
 :- end_tests(splice).
+
+:- begin_tests(safety).
+
+:- use_module('../safety').
+
+test(classifies_arithmetic_assignment_as_safe) :-
+    classify_goal_safety((_X is _Y + 1), safe).
+
+test(classifies_comparison_as_safe) :-
+    classify_goal_safety(_N > 0, safe).
+
+test(classifies_unification_as_safe) :-
+    classify_goal_safety(_A = _B, safe).
+
+test(classifies_type_test_as_safe) :-
+    classify_goal_safety(integer(_), safe).
+
+test(classifies_member_as_safe) :-
+    classify_goal_safety(member(_, _), safe).
+
+test(classifies_writeln_as_unsafe) :-
+    classify_goal_safety(writeln(_), unsafe).
+
+test(classifies_write_as_unsafe) :-
+    classify_goal_safety(write(_), unsafe).
+
+test(classifies_assert_as_unsafe) :-
+    classify_goal_safety(assert(_), unsafe).
+
+test(classifies_retract_as_unsafe) :-
+    classify_goal_safety(retract(_), unsafe).
+
+test(classifies_findall_as_unsafe) :-
+    classify_goal_safety(findall(_, _, _), unsafe).
+
+test(classifies_nl_as_unsafe) :-
+    classify_goal_safety(nl, unsafe).
+
+test(classifies_cut_as_unsafe) :-
+    classify_goal_safety(!, unsafe).
+
+test(classifies_user_defined_goal_as_unknown) :-
+    classify_goal_safety(my_custom_predicate(_), unknown).
+
+test(body_all_safe_goals_is_safe) :-
+    classify_body_safety([_X is _Y + 1, _A > 0, member(_, _)], safe).
+
+test(body_with_unsafe_goal_is_unsafe) :-
+    classify_body_safety([_X is _Y + 1, writeln(_)], unsafe).
+
+test(body_with_unknown_goal_is_unknown) :-
+    classify_body_safety([_X is _Y + 1, my_custom_predicate(_)], unknown).
+
+test(body_unsafe_dominates_unknown) :-
+    classify_body_safety([my_pred(_), writeln(_)], unsafe).
+
+test(empty_body_is_safe) :-
+    classify_body_safety([], safe).
+
+test(has_side_effects_true_for_io) :-
+    assertion(has_side_effects(writeln(_))),
+    assertion(has_side_effects(format(_,_))),
+    assertion(has_side_effects(read(_))).
+
+test(has_side_effects_false_for_pure_goals, [fail]) :-
+    has_side_effects(_ is _ + 1).
+
+test(has_cut_detects_cut) :-
+    assertion(has_cut(!)).
+
+test(has_cut_false_for_pure_goals, [fail]) :-
+    has_cut(_ is _ + 1).
+
+test(experimental_mode_defaults_to_false) :-
+    experimental_mode(false).
+
+test(set_experimental_mode_changes_flag, [cleanup(set_experimental_mode(false))]) :-
+    set_experimental_mode(true),
+    experimental_mode(true).
+
+test(experimental_mode_restored_to_false_after_cleanup) :-
+    experimental_mode(false).
+
+:- end_tests(safety).
