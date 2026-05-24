@@ -36,6 +36,7 @@ recursive_index_step(ir_clause(_, Head, [RecursiveGoal], _), Name/Arity, StepAdd
     preserved_recursive_tail(HeadTail, GoalTail),
     member(Value, HeadTail),
     var(Value),
+    Root \== Child,
     unique_variable_address(Root, Child, StepAddress),
     StepAddress \= [].
 
@@ -46,6 +47,7 @@ recursive_index_base(ir_clause(_, Head, [], _), Name/Arity, BaseAddress, Value) 
     member(Value, HeadTail),
     % Only variable outputs can be propagated safely through the report.
     var(Value),
+    Root \== Value,
     unique_variable_address(Root, Value, BaseAddress),
     BaseAddress \= [].
 

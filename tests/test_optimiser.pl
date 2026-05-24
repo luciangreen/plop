@@ -269,7 +269,7 @@ test(optimise_program_includes_stage4_report_items) :-
 :- use_module('../optimiser').
 :- use_module('../recursive_index').
 
-test(needed_subterms_collects_requested_values) :-
+test(extracts_multiple_subterms_by_address) :-
     needed_subterms(
         tree(tree(leaf(a), branch(b, c)), branch(d, e)),
         [[1, 2, 1], [2, 2]],
@@ -277,7 +277,7 @@ test(needed_subterms_collects_requested_values) :-
     ),
     assertion(Values == [b, e]).
 
-test(detects_recursive_index_mapping_candidate) :-
+test(detects_recursive_tree_traversal_pattern) :-
     ProgramIR = [
         ir_clause(c1, walk_tree(tree(Left, _), X), [walk_tree(Left, X)], []),
         ir_clause(c2, walk_tree(tree(_, branch(X, _)), X), [], [])
