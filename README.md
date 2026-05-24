@@ -11,6 +11,8 @@ Implemented stages from `pr3.txt`:
 - Stage 7: recursive index-loop analysis with `needed_subterms/3`
 - Stage 8: Gaussian elimination formula discovery
 - Stage 9: list-manipulation-to-formula optimisation
+- Stage 10: shortcut and splicing optimisation
+- Stage 11: deterministic loop conversion
 
 ## Run tests
 

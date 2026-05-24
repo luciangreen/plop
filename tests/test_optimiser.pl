@@ -403,6 +403,68 @@ test_sequence_identity(N, N).
 
 :- end_tests(formula_discovery).
 
+:- begin_tests(loop_conversion).
+
+:- use_module('../optimiser').
+:- use_module('../loop_conversion').
+
+test(converts_member_findall_to_deterministic_loop) :-
+    ProgramIR = [
+        ir_clause(c1, p(L, Ys), [findall(Y, (member(X, L), process(X, Y)), Ys)], [])
+    ],
+    convert_deterministic_loops(ProgramIR, OptimisedIR, Report),
+    member(ir_clause(_, p(_, _), [HelperCall], _), OptimisedIR),
+    functor(HelperCall, HelperName, 2),
+    member(ir_clause(_, BaseHead, [], _), OptimisedIR),
+    functor(BaseHead, HelperName, 2),
+    member(ir_clause(_, StepHead, StepBody, _), OptimisedIR),
+    functor(StepHead, HelperName, 2),
+    assertion(member(loop_converted(p/2), Report)),
+    assertion(StepBody = [process(_, _), _]).
+
+test(converts_between_findall_to_deterministic_loop) :-
+    ProgramIR = [
+        ir_clause(c1, p(N, Ys), [findall(Y, (between(1, N, X), process(X, Y)), Ys)], [])
+    ],
+    convert_deterministic_loops(ProgramIR, OptimisedIR, Report),
+    member(ir_clause(_, p(_, _), [HelperCall], _), OptimisedIR),
+    functor(HelperCall, HelperName, 3),
+    assertion(member(loop_converted(p/2), Report)),
+    member(ir_clause(_, StepHead, StepBody, _), OptimisedIR),
+    functor(StepHead, HelperName, 3),
+    assertion(member(_ =< _, StepBody)),
+    assertion(member(_ is _ + 1, StepBody)).
+
+test(converts_nth0_findall_to_deterministic_loop) :-
+    ProgramIR = [
+        ir_clause(c1, p(L, Ys), [findall(Y, (nth0(I, L, X), pair(I, X, Y)), Ys)], [])
+    ],
+    convert_deterministic_loops(ProgramIR, OptimisedIR, Report),
+    member(ir_clause(_, p(_, _), [HelperCall], _), OptimisedIR),
+    functor(HelperCall, HelperName, 3),
+    assertion(member(loop_converted(p/2), Report)),
+    member(ir_clause(_, StepHead, StepBody, _), OptimisedIR),
+    functor(StepHead, HelperName, 3),
+    assertion(member(pair(_, _, _), StepBody)),
+    assertion(member(_ is _ + 1, StepBody)).
+
+test(does_not_convert_when_map_goal_uses_external_variable) :-
+    ProgramIR = [
+        ir_clause(c1, p(L, Offset, Ys), [findall(Y, (member(X, L), process(X, Offset, Y)), Ys)], [])
+    ],
+    convert_deterministic_loops(ProgramIR, OptimisedIR, Report),
+    assertion(OptimisedIR = ProgramIR),
+    assertion(Report = []).
+
+test(optimise_program_includes_stage11_report_items) :-
+    ProgramIR = [
+        ir_clause(c1, p(L, Ys), [findall(Y, (member(X, L), process(X, Y)), Ys)], [])
+    ],
+    optimise_program(ProgramIR, _OptimisedIR, optimisation_report(Report)),
+    assertion(member(loop_converted(p/2), Report)).
+
+:- end_tests(loop_conversion).
+
 :- begin_tests(splice).
 
 :- use_module('../optimiser').
