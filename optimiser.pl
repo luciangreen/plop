@@ -4,6 +4,7 @@
 :- use_module(unfold).
 :- use_module(memoise).
 :- use_module(simplify).
+:- use_module(list_formula).
 :- use_module(enumerators).
 :- use_module(indexical).
 :- use_module(recursive_index).
@@ -17,27 +18,31 @@ optimise_program(ProgramIR, OptimisedIR, optimisation_report(Items)) :-
     unfold_program(ProgramIR, UnfoldedIR, UnfoldItems),
     memoise_program(UnfoldedIR, MemoisedIR, MemoItems),
     simplify_program(MemoisedIR, SimplifiedIR, SimplifyItems),
-    optimise_indexicals(SimplifiedIR, IndexicalIR, IndexicalItems),
+    optimise_list_formulas(SimplifiedIR, ListFormulaIR, ListFormulaItems),
+    optimise_indexicals(ListFormulaIR, IndexicalIR, IndexicalItems),
     optimise_recursive_index_loops(IndexicalIR, OptimisedIR, RecursiveIndexItems),
     analyse_enumerators(ProgramIR, OptimisedIR, EnumeratorItems),
     append(UnfoldItems, MemoItems, Items0),
     append(Items0, SimplifyItems, Items1),
-    append(Items1, IndexicalItems, Items2),
-    append(Items2, RecursiveIndexItems, Items3),
-    append(Items3, EnumeratorItems, Items).
+    append(Items1, ListFormulaItems, Items2),
+    append(Items2, IndexicalItems, Items3),
+    append(Items3, RecursiveIndexItems, Items4),
+    append(Items4, EnumeratorItems, Items).
 
 optimise_predicate(PredicateNameArity, ProgramIR, OptimisedIR, optimisation_report(Items)) :-
     unfold_predicate(PredicateNameArity, ProgramIR, UnfoldedIR, UnfoldItems),
     memoise_program(UnfoldedIR, MemoisedIR, MemoItems),
     simplify_program(MemoisedIR, SimplifiedIR, SimplifyItems),
-    optimise_indexicals(SimplifiedIR, IndexicalIR, IndexicalItems),
+    optimise_list_formulas(SimplifiedIR, ListFormulaIR, ListFormulaItems),
+    optimise_indexicals(ListFormulaIR, IndexicalIR, IndexicalItems),
     optimise_recursive_index_loops(IndexicalIR, OptimisedIR, RecursiveIndexItems),
     analyse_enumerators(ProgramIR, OptimisedIR, EnumeratorItems),
     append(UnfoldItems, MemoItems, Items0),
     append(Items0, SimplifyItems, Items1),
-    append(Items1, IndexicalItems, Items2),
-    append(Items2, RecursiveIndexItems, Items3),
-    append(Items3, EnumeratorItems, Items).
+    append(Items1, ListFormulaItems, Items2),
+    append(Items2, IndexicalItems, Items3),
+    append(Items3, RecursiveIndexItems, Items4),
+    append(Items4, EnumeratorItems, Items).
 
 write_program(OutputPath, ProgramIR) :-
     setup_call_cleanup(

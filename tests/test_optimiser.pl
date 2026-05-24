@@ -305,6 +305,56 @@ test(does_not_report_non_recursive_index_pattern) :-
 
 :- end_tests(recursive_index).
 
+:- begin_tests(list_formula).
+
+:- use_module('../optimiser').
+:- use_module('../list_formula').
+
+test(rewrites_build_1_to_n_sum_list_to_formula) :-
+    ProgramIR = [
+        ir_clause(c1, seq_sum(N, S), [build_1_to_n(N, L), sum_list(L, S)], [])
+    ],
+    optimise_list_formulas(ProgramIR, OptimisedIR, Report),
+    member(ir_clause(_, seq_sum(_, _), Body, _), OptimisedIR),
+    assertion(Body = [S is N * (N + 1) // 2]),
+    assertion(member(formula_discovered(seq_sum/2, n_times_n_plus_1_over_2), Report)).
+
+test(rewrites_build_sequence_sum_list_to_formula) :-
+    ProgramIR = [
+        ir_clause(c1, seq_sum(N, Start, Step, S), [build_sequence(N, Start, Step, L), sum_list(L, S)], [])
+    ],
+    optimise_list_formulas(ProgramIR, OptimisedIR, Report),
+    member(ir_clause(_, seq_sum(_, _, _, _), Body, _), OptimisedIR),
+    assertion(Body = [S is N * (2 * Start + (N - 1) * Step) // 2]),
+    assertion(member(formula_discovered(seq_sum/4, arithmetic_progression_sum), Report)).
+
+test(does_not_rewrite_when_list_is_reused_elsewhere) :-
+    ProgramIR = [
+        ir_clause(c1, seq_sum(N, S, Len), [build_1_to_n(N, L), sum_list(L, S), length(L, Len)], [])
+    ],
+    optimise_list_formulas(ProgramIR, OptimisedIR, Report),
+    member(ir_clause(_, seq_sum(_, _, _), Body, _), OptimisedIR),
+    assertion(Body = [build_1_to_n(N, L), sum_list(L, S), length(L, Len)]),
+    assertion(Report = []).
+
+test(does_not_rewrite_when_list_escapes_in_head) :-
+    ProgramIR = [
+        ir_clause(c1, seq_sum(N, L, S), [build_1_to_n(N, L), sum_list(L, S)], [])
+    ],
+    optimise_list_formulas(ProgramIR, OptimisedIR, Report),
+    member(ir_clause(_, seq_sum(_, _, _), Body, _), OptimisedIR),
+    assertion(Body = [build_1_to_n(N, L), sum_list(L, S)]),
+    assertion(Report = []).
+
+test(optimise_program_includes_stage9_report_items) :-
+    ProgramIR = [
+        ir_clause(c1, seq_sum(N, S), [build_1_to_n(N, L), sum_list(L, S)], [])
+    ],
+    optimise_program(ProgramIR, _OptimisedIR, optimisation_report(Report)),
+    assertion(member(formula_discovered(seq_sum/2, n_times_n_plus_1_over_2), Report)).
+
+:- end_tests(list_formula).
+
 :- begin_tests(gaussian).
 
 :- use_module('../gaussian').
