@@ -78,7 +78,8 @@ allowed_map_vars(between, X, Y, _, [X, Y]).
 allowed_map_vars(nth0, X, Y, Index, [Index, X, Y]).
 allowed_map_vars(nth1, X, Y, Index, [Index, X, Y]).
 
-build_helper(member, HelperName, X, Y, List, _, MapGoal, Replacement, [BaseClause, StepClause]) :-
+% For member/2 conversion the second source argument slot is unused.
+build_helper(member, HelperName, X, Y, List, _UnusedSourceB, MapGoal, Replacement, [BaseClause, StepClause]) :-
     copy_term((X, Y, MapGoal), (HX, HY, HGoal)),
     Replacement =.. [HelperName, List, Ys],
     BaseHead =.. [HelperName, [], []],
@@ -141,14 +142,14 @@ map_goal_safe(Goal, AllowedVars) :-
 
 all_vars_allowed([], _).
 all_vars_allowed([Var | Rest], AllowedVars) :-
-    member_var_eq(Var, AllowedVars),
+    member_var_identity(Var, AllowedVars),
     all_vars_allowed(Rest, AllowedVars).
 
-member_var_eq(Var, [Candidate | _]) :-
+member_var_identity(Var, [Candidate | _]) :-
     Var == Candidate,
     !.
-member_var_eq(Var, [_ | Rest]) :-
-    member_var_eq(Var, Rest).
+member_var_identity(Var, [_ | Rest]) :-
+    member_var_identity(Var, Rest).
 
 unsafe_goal(Goal) :-
     (   var(Goal)
