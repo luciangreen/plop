@@ -79,7 +79,7 @@ allowed_map_vars(nth0, X, Y, Index, [Index, X, Y]).
 allowed_map_vars(nth1, X, Y, Index, [Index, X, Y]).
 
 % For member/2 conversion the second source argument slot is unused.
-build_helper(member, HelperName, X, Y, List, _UnusedSourceB, MapGoal, Replacement, [BaseClause, StepClause]) :-
+build_helper(member, HelperName, X, Y, List, _, MapGoal, Replacement, [BaseClause, StepClause]) :-
     copy_term((X, Y, MapGoal), (HX, HY, HGoal)),
     Replacement =.. [HelperName, List, Ys],
     BaseHead =.. [HelperName, [], []],
@@ -103,6 +103,8 @@ build_helper(between, HelperName, X, Y, Start, End, MapGoal, Replacement, [BaseC
 build_helper(nth0, HelperName, X, Y, List, IndexVar, MapGoal, Replacement, [BaseClause, StepClause]) :-
     copy_term((IndexVar, X, Y, MapGoal), (HIndex, HX, HY, HGoal)),
     Replacement =.. [HelperName, List, 0, Ys],
+    % Base case keeps index unconstrained because recursion reaches [] after
+    % arbitrary increments from the initial index.
     BaseHead =.. [HelperName, [], _, []],
     StepHead =.. [HelperName, [HX | Xs], Index, [HY | Ys]],
     StepCall =.. [HelperName, Xs, NextIndex, Ys],
@@ -116,6 +118,8 @@ build_helper(nth0, HelperName, X, Y, List, IndexVar, MapGoal, Replacement, [Base
 build_helper(nth1, HelperName, X, Y, List, IndexVar, MapGoal, Replacement, [BaseClause, StepClause]) :-
     copy_term((IndexVar, X, Y, MapGoal), (HIndex, HX, HY, HGoal)),
     Replacement =.. [HelperName, List, 1, Ys],
+    % Base case keeps index unconstrained because recursion reaches [] after
+    % arbitrary increments from the initial index.
     BaseHead =.. [HelperName, [], _, []],
     StepHead =.. [HelperName, [HX | Xs], Index, [HY | Ys]],
     StepCall =.. [HelperName, Xs, NextIndex, Ys],
