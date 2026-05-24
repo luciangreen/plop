@@ -11,10 +11,10 @@ optimise_recursive_index_loops(ProgramIR, ProgramIR, Report) :-
     sort(ReportRaw, Report).
 
 needed_subterms(Term, Addresses, Values) :-
-    same_length(Addresses, Values),
     needed_subterms_(Addresses, Term, Values).
 
-needed_subterms_([], _, []).
+needed_subterms_([], _, []) :-
+    !.
 needed_subterms_([Address | RestAddresses], Term, [Value | RestValues]) :-
     subterm_with_address(Term, Address, Value),
     needed_subterms_(RestAddresses, Term, RestValues).
