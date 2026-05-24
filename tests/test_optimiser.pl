@@ -595,3 +595,32 @@ test(set_experimental_mode_changes_flag, [cleanup(set_experimental_mode(false))]
     experimental_mode(true).
 
 :- end_tests(safety).
+
+:- begin_tests(reporter).
+
+:- use_module('../reporter').
+
+test(report_text_formats_required_items) :-
+    Report = optimisation_report([
+        unfolded(p/2),
+        memoised(q/1),
+        formula_discovered(sum_to_n/2, n_times_n_plus_1_over_2),
+        indexical_mapping(lookup/4, addr([I, J], X)),
+        loop_converted(seq_sum/2),
+        skipped(r/3, unsafe)
+    ]),
+    report_text(Report, Text),
+    assertion(sub_string(Text, _, _, _, 'unfolded: p/2')),
+    assertion(sub_string(Text, _, _, _, 'memoised: q/1')),
+    assertion(sub_string(Text, _, _, _, 'formula_discovered: sum_to_n/2 => n_times_n_plus_1_over_2')),
+    assertion(sub_string(Text, _, _, _, 'indexical_mapping: lookup/4 => addr([')),
+    assertion(sub_string(Text, _, _, _, 'loop_converted: seq_sum/2')),
+    assertion(sub_string(Text, _, _, _, 'skipped: r/3 (unsafe)')).
+
+test(print_report_writes_lines) :-
+    Report = optimisation_report([unfolded(p/2), skipped(p/2, unknown)]),
+    with_output_to(string(Output), print_report(Report)),
+    assertion(sub_string(Output, _, _, _, 'unfolded: p/2')),
+    assertion(sub_string(Output, _, _, _, 'skipped: p/2 (unknown)')).
+
+:- end_tests(reporter).
