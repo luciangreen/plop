@@ -60,6 +60,8 @@ unique_variable_address(Term, Var, Address) :-
     findall(Path, variable_address(Term, Var, [], Path), Paths),
     single_address(Paths, Address).
 
+% Recursive index candidates only keep variables that resolve to one
+% concrete address; zero or multiple matches are rejected.
 single_address([Address], Address).
 
 variable_address(Term, Var, Path, Path) :-
