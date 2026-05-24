@@ -2,6 +2,8 @@
 
 :- use_module(subterm_address, [subterm_with_address/3]).
 
+% Report items keep the extracted value as a variable so callers can see
+% which output position is recovered from the discovered address.
 optimise_recursive_index_loops(ProgramIR, ProgramIR, Report) :-
     findall(
         recursive_index_mapping(Pred, addr(Address, Value)),
@@ -42,6 +44,7 @@ recursive_index_base(ir_clause(_, Head, [], _), Name/Arity, BaseAddress, Value) 
     Arity >= 2,
     Head =.. [Name, Root | HeadTail],
     member(Value, HeadTail),
+    % Only variable outputs can be propagated safely through the report.
     var(Value),
     unique_variable_address(Root, Value, BaseAddress),
     BaseAddress \= [].

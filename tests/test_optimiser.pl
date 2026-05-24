@@ -293,7 +293,8 @@ test(optimise_program_includes_stage7_report_items) :-
         ir_clause(c2, walk_tree(tree(_, branch(X, _)), X), [], [])
     ],
     optimise_program(ProgramIR, _OptimisedIR, optimisation_report(Report)),
-    assertion(member(recursive_index_mapping(walk_tree/2, addr([1, 2, 1], X)), Report)).
+    assertion(member(recursive_index_mapping(walk_tree/2, addr([1, 2, 1], ReportValue)), Report)),
+    assertion(var(ReportValue)).
 
 test(does_not_report_non_recursive_index_pattern) :-
     ProgramIR = [
