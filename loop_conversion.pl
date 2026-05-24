@@ -53,7 +53,8 @@ convert_findall_goal(Head, Id, findall(Y, Generator, Ys), Replacement, HelperCla
     var(Y),
     var(Ys),
     generator_map_goal(Generator, Enumerator, X, SourceA, SourceB, MapGoal),
-    map_goal_safe(MapGoal, [X, Y]),
+    allowed_map_vars(Enumerator, X, Y, SourceB, AllowedVars),
+    map_goal_safe(MapGoal, AllowedVars),
     helper_name(Head, Id, Enumerator, HelperName),
     build_helper(
         Enumerator,
@@ -71,6 +72,11 @@ generator_map_goal((member(X, List), Goal), member, X, List, _, Goal).
 generator_map_goal((between(Start, End, X), Goal), between, X, Start, End, Goal).
 generator_map_goal((nth0(Index, List, X), Goal), nth0, X, List, Index, Goal).
 generator_map_goal((nth1(Index, List, X), Goal), nth1, X, List, Index, Goal).
+
+allowed_map_vars(member, X, Y, _, [X, Y]).
+allowed_map_vars(between, X, Y, _, [X, Y]).
+allowed_map_vars(nth0, X, Y, Index, [Index, X, Y]).
+allowed_map_vars(nth1, X, Y, Index, [Index, X, Y]).
 
 build_helper(member, HelperName, X, Y, List, _, MapGoal, Replacement, [BaseClause, StepClause]) :-
     copy_term((X, Y, MapGoal), (HX, HY, HGoal)),
@@ -93,8 +99,8 @@ build_helper(between, HelperName, X, Y, Start, End, MapGoal, Replacement, [BaseC
         [Cur =< Last, HX = Cur, HGoal, Next is Cur + 1, StepCall],
         []
     ).
-build_helper(nth0, HelperName, X, Y, List, _, MapGoal, Replacement, [BaseClause, StepClause]) :-
-    copy_term((X, Y, MapGoal), (HX, HY, HGoal)),
+build_helper(nth0, HelperName, X, Y, List, IndexVar, MapGoal, Replacement, [BaseClause, StepClause]) :-
+    copy_term((IndexVar, X, Y, MapGoal), (HIndex, HX, HY, HGoal)),
     Replacement =.. [HelperName, List, 0, Ys],
     BaseHead =.. [HelperName, [], _, []],
     StepHead =.. [HelperName, [HX | Xs], Index, [HY | Ys]],
@@ -103,11 +109,11 @@ build_helper(nth0, HelperName, X, Y, List, _, MapGoal, Replacement, [BaseClause,
     StepClause = ir_clause(
         step(HelperName),
         StepHead,
-        [HGoal, NextIndex is Index + 1, StepCall],
+        [HIndex = Index, HGoal, NextIndex is Index + 1, StepCall],
         []
     ).
-build_helper(nth1, HelperName, X, Y, List, _, MapGoal, Replacement, [BaseClause, StepClause]) :-
-    copy_term((X, Y, MapGoal), (HX, HY, HGoal)),
+build_helper(nth1, HelperName, X, Y, List, IndexVar, MapGoal, Replacement, [BaseClause, StepClause]) :-
+    copy_term((IndexVar, X, Y, MapGoal), (HIndex, HX, HY, HGoal)),
     Replacement =.. [HelperName, List, 1, Ys],
     BaseHead =.. [HelperName, [], _, []],
     StepHead =.. [HelperName, [HX | Xs], Index, [HY | Ys]],
@@ -116,7 +122,7 @@ build_helper(nth1, HelperName, X, Y, List, _, MapGoal, Replacement, [BaseClause,
     StepClause = ir_clause(
         step(HelperName),
         StepHead,
-        [HGoal, NextIndex is Index + 1, StepCall],
+        [HIndex = Index, HGoal, NextIndex is Index + 1, StepCall],
         []
     ).
 
