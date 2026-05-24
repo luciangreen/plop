@@ -519,6 +519,8 @@ test(optimise_program_includes_stage10_report_items) :-
 
 :- use_module('../safety').
 :- use_module('../optimiser').
+:- use_module('../list_formula').
+:- use_module('../memoise').
 
 test(classifies_arithmetic_assignment_as_safe) :-
     classify_goal_safety((_X is _Y + 1), safe).
@@ -600,6 +602,10 @@ test(optimise_program_skips_unsafe_rewrite_when_not_experimental, [cleanup(set_e
     ProgramIR = [
         ir_clause(c1, seq_sum(N, S), [build_1_to_n(N, L), sum_list(L, S), writeln(S)], [])
     ],
+    optimise_list_formulas(ProgramIR, ListFormulaIR, ListFormulaReport),
+    member(ir_clause(_, seq_sum(_, _), ListFormulaBody, _), ListFormulaIR),
+    assertion(ListFormulaBody = [S is N * (N + 1) // 2, writeln(S)]),
+    assertion(member(formula_discovered(seq_sum/2, n_times_n_plus_1_over_2), ListFormulaReport)),
     optimise_program(ProgramIR, OptimisedIR, optimisation_report(Report)),
     member(ir_clause(_, seq_sum(_, _), Body, _), OptimisedIR),
     assertion(Body = [build_1_to_n(N, L), sum_list(L, S), writeln(S)]),
@@ -610,6 +616,10 @@ test(optimise_program_skips_unknown_rewrite_when_not_experimental, [cleanup(set_
     ProgramIR = [
         ir_clause(c1, p(X, Y, Z), [expensive(X, A), expensive(X, B), (Y is A + 1), (Z is B + 2)], [])
     ],
+    memoise_program(ProgramIR, MemoisedIR, MemoisedReport),
+    member(ir_clause(_, p(_, _, _), MemoisedBody, _), MemoisedIR),
+    assertion(MemoisedBody = [expensive(X, A), (Y is A + 1), (Z is A + 2)]),
+    assertion(member(memoised(p/3), MemoisedReport)),
     optimise_program(ProgramIR, OptimisedIR, optimisation_report(Report)),
     member(ir_clause(_, p(_, _, _), Body, _), OptimisedIR),
     assertion(Body = [expensive(X, A), expensive(X, B), (Y is A + 1), (Z is B + 2)]),
