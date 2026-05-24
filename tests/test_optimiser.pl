@@ -284,7 +284,8 @@ test(detects_recursive_index_mapping_candidate) :-
     ],
     optimise_recursive_index_loops(ProgramIR, OptimisedIR, Report),
     assertion(OptimisedIR = ProgramIR),
-    assertion(member(recursive_index_mapping(walk_tree/2, addr([1, 2, 1], X)), Report)).
+    assertion(member(recursive_index_mapping(walk_tree/2, addr([1, 2, 1], ReportValue)), Report)),
+    assertion(var(ReportValue)).
 
 test(optimise_program_includes_stage7_report_items) :-
     ProgramIR = [

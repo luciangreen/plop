@@ -53,7 +53,9 @@ preserved_recursive_tail([HeadArg | HeadRest], [GoalArg | GoalRest]) :-
 
 unique_variable_address(Term, Var, Address) :-
     findall(Path, variable_address(Term, Var, [], Path), Paths),
-    Paths = [Address].
+    single_address(Paths, Address).
+
+single_address([Address], Address).
 
 variable_address(Term, Var, Path, Path) :-
     var(Term),
