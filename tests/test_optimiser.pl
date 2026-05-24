@@ -337,6 +337,9 @@ test(infer_sequence_formula_finds_lowest_degree_match) :-
     infer_sequence_formula([1, 3, 5, 7, 9], Formula),
     assertion(Formula = (2 * n - 1)).
 
+test(infer_sequence_formula_fails_for_empty_samples, [fail]) :-
+    infer_sequence_formula([], _).
+
 test(verify_formula_accepts_matching_sequence_predicate) :-
     verify_formula(test_sequence_triangular, n * (n + 1) / 2, 1-5).
 

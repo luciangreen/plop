@@ -1,11 +1,9 @@
 :- module(gaussian, [
     fit_polynomial/3,
     gaussian_eliminate/2,
-    infer_sequence_formula/2,
-    verify_formula/3
+    polynomial_value/3,
+    approximately_equal/2
 ]).
-
-:- meta_predicate verify_formula(2, +, +).
 
 fit_polynomial(Samples, Degree, Formula) :-
     valid_degree(Degree),
@@ -24,26 +22,6 @@ gaussian_eliminate(Matrix, ReducedMatrix) :-
     VariableCount is max(0, ColumnCount - 1),
     gauss_jordan([], Matrix, 1, VariableCount, ReducedRaw),
     maplist(sanitise_row, ReducedRaw, ReducedMatrix).
-
-infer_sequence_formula(Samples, Formula) :-
-    length(Samples, SampleCount),
-    MaxDegree is max(0, SampleCount - 1),
-    between(0, MaxDegree, Degree),
-    fit_polynomial(Samples, Degree, Formula),
-    !.
-
-verify_formula(OriginalPredicate, Formula, Start-End) :-
-    integer(Start),
-    integer(End),
-    Start =< End,
-    forall(
-        between(Start, End, N),
-        (
-            call(OriginalPredicate, N, Expected),
-            formula_value(Formula, N, Actual),
-            approximately_equal(Expected, Actual)
-        )
-    ).
 
 valid_degree(Degree) :-
     integer(Degree),
@@ -111,7 +89,7 @@ normalise_pivot_row(Row, Column, NormalisedRow) :-
     maplist(divide_by(PivotValue), Row, NormalisedRow).
 
 divide_by(Divisor, Value, Result) :-
-    Result is Value / Divisor.
+    Result is rationalize(Value / Divisor).
 
 eliminate_rows([], _, _, []).
 eliminate_rows([Row | Rest], Column, PivotRow, [ReducedRow | ReducedRest]) :-
@@ -127,7 +105,7 @@ eliminate_row(Row, Factor, PivotRow, ReducedRow) :-
     ).
 
 subtract_scaled(Factor, Value, PivotValue, Result) :-
-    Result is Value - Factor * PivotValue.
+    Result is rationalize(Value - Factor * PivotValue).
 
 coefficients_from_reduced([], []).
 coefficients_from_reduced([Row | Rest], [Coefficient | Coefficients]) :-
@@ -146,11 +124,12 @@ coefficients_fit_samples(Coefficients, [Sample | Rest], N) :-
 
 coefficients_formula(Coefficients, Formula) :-
     normalised_coefficients(Coefficients, Normalised),
+    half(Half),
     (   Normalised = [0, 1]
     ->  Formula = n
     ;   Normalised = [-1, 2]
     ->  Formula = 2 * n - 1
-    ;   Normalised = [0, one_half, one_half]
+    ;   Normalised = [0, Half, Half]
     ->  Formula = n * (n + 1) / 2
     ;   Formula = polynomial(Normalised)
     ).
@@ -166,53 +145,27 @@ normalise_coefficient(Coefficient, Normalised) :-
     ;   Rounded is round(Coefficient),
         approximately_equal(Coefficient, Rounded)
     ->  Normalised = Rounded
-    ;   approximately_equal(Coefficient, 0.5)
-    ->  Normalised = one_half
-    ;   approximately_equal(Coefficient, -0.5)
-    ->  Normalised = minus_one_half
+    ;   half(Half),
+        approximately_equal(Coefficient, Half)
+    ->  Normalised = Half
+    ;   minus_half(MinusHalf),
+        approximately_equal(Coefficient, MinusHalf)
+    ->  Normalised = MinusHalf
     ;   Normalised = Coefficient
     ).
 
-formula_value(polynomial(Coefficients), N, Value) :-
-    coefficient_values(Coefficients, NumericCoefficients),
-    polynomial_value(NumericCoefficients, N, Value).
-formula_value(Formula, N, Value) :-
-    substitute_n(Formula, N, GroundFormula),
-    Value is GroundFormula.
-
-coefficient_values([], []).
-coefficient_values([Coefficient | Rest], [Numeric | NumericRest]) :-
-    coefficient_value(Coefficient, Numeric),
-    coefficient_values(Rest, NumericRest).
-
-coefficient_value(one_half, 0.5).
-coefficient_value(minus_one_half, -0.5).
-coefficient_value(Value, Value).
+half(1 rdiv 2).
+minus_half(-1 rdiv 2).
 
 polynomial_value(Coefficients, N, Value) :-
     polynomial_value(Coefficients, N, 0, 0, Value).
 
 polynomial_value([], _, _, Accumulator, Accumulator).
 polynomial_value([Coefficient | Rest], N, Degree, Accumulator0, Value) :-
-    coefficient_value(Coefficient, NumericCoefficient),
-    Term is NumericCoefficient * (N ^ Degree),
+    Term is Coefficient * (N ^ Degree),
     Accumulator is Accumulator0 + Term,
     NextDegree is Degree + 1,
     polynomial_value(Rest, N, NextDegree, Accumulator, Value).
-
-substitute_n(n, N, N) :-
-    !.
-substitute_n(Term, _, Term) :-
-    atomic(Term),
-    !.
-substitute_n(Term, N, GroundTerm) :-
-    compound(Term),
-    Term =.. [Functor | Args],
-    maplist(substitute_n_with(N), Args, GroundArgs),
-    GroundTerm =.. [Functor | GroundArgs].
-
-substitute_n_with(N, Term, GroundTerm) :-
-    substitute_n(Term, N, GroundTerm).
 
 sanitise_row([], []).
 sanitise_row([Value | Rest], [Sanitised | SanitisedRest]) :-
