@@ -263,3 +263,44 @@ test(optimise_program_includes_stage4_report_items) :-
     assertion(member(enumerator(retained, p/1, member/2), Report)).
 
 :- end_tests(enumerators).
+
+:- begin_tests(recursive_index).
+
+:- use_module('../optimiser').
+:- use_module('../recursive_index').
+
+test(extracts_multiple_subterms_by_address) :-
+    needed_subterms(
+        tree(tree(leaf(a), branch(b, c)), branch(d, e)),
+        [[1, 2, 1], [2, 2]],
+        Values
+    ),
+    assertion(Values == [b, e]).
+
+test(detects_recursive_tree_traversal_pattern) :-
+    ProgramIR = [
+        ir_clause(c1, walk_tree(tree(Left, _), X), [walk_tree(Left, X)], []),
+        ir_clause(c2, walk_tree(tree(_, branch(X, _)), X), [], [])
+    ],
+    optimise_recursive_index_loops(ProgramIR, OptimisedIR, Report),
+    assertion(OptimisedIR = ProgramIR),
+    assertion(member(recursive_index_mapping(walk_tree/2, addr([1, 2, 1], ReportValue)), Report)),
+    assertion(var(ReportValue)).
+
+test(optimise_program_includes_stage7_report_items) :-
+    ProgramIR = [
+        ir_clause(c1, walk_tree(tree(Left, _), X), [walk_tree(Left, X)], []),
+        ir_clause(c2, walk_tree(tree(_, branch(X, _)), X), [], [])
+    ],
+    optimise_program(ProgramIR, _OptimisedIR, optimisation_report(Report)),
+    assertion(member(recursive_index_mapping(walk_tree/2, addr([1, 2, 1], ReportValue)), Report)),
+    assertion(var(ReportValue)).
+
+test(does_not_report_non_recursive_index_pattern) :-
+    ProgramIR = [
+        ir_clause(c1, walk_tree(tree(_, branch(X, _)), X), [], [])
+    ],
+    optimise_recursive_index_loops(ProgramIR, _OptimisedIR, Report),
+    assertion(Report = []).
+
+:- end_tests(recursive_index).

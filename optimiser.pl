@@ -6,6 +6,7 @@
 :- use_module(simplify).
 :- use_module(enumerators).
 :- use_module(indexical).
+:- use_module(recursive_index).
 
 optimise_file(InputFile, OutputFile) :-
     parse_file(InputFile, ProgramIR),
@@ -16,23 +17,27 @@ optimise_program(ProgramIR, OptimisedIR, optimisation_report(Items)) :-
     unfold_program(ProgramIR, UnfoldedIR, UnfoldItems),
     memoise_program(UnfoldedIR, MemoisedIR, MemoItems),
     simplify_program(MemoisedIR, SimplifiedIR, SimplifyItems),
-    optimise_indexicals(SimplifiedIR, OptimisedIR, IndexicalItems),
+    optimise_indexicals(SimplifiedIR, IndexicalIR, IndexicalItems),
+    optimise_recursive_index_loops(IndexicalIR, OptimisedIR, RecursiveIndexItems),
     analyse_enumerators(ProgramIR, OptimisedIR, EnumeratorItems),
     append(UnfoldItems, MemoItems, Items0),
     append(Items0, SimplifyItems, Items1),
     append(Items1, IndexicalItems, Items2),
-    append(Items2, EnumeratorItems, Items).
+    append(Items2, RecursiveIndexItems, Items3),
+    append(Items3, EnumeratorItems, Items).
 
 optimise_predicate(PredicateNameArity, ProgramIR, OptimisedIR, optimisation_report(Items)) :-
     unfold_predicate(PredicateNameArity, ProgramIR, UnfoldedIR, UnfoldItems),
     memoise_program(UnfoldedIR, MemoisedIR, MemoItems),
     simplify_program(MemoisedIR, SimplifiedIR, SimplifyItems),
-    optimise_indexicals(SimplifiedIR, OptimisedIR, IndexicalItems),
+    optimise_indexicals(SimplifiedIR, IndexicalIR, IndexicalItems),
+    optimise_recursive_index_loops(IndexicalIR, OptimisedIR, RecursiveIndexItems),
     analyse_enumerators(ProgramIR, OptimisedIR, EnumeratorItems),
     append(UnfoldItems, MemoItems, Items0),
     append(Items0, SimplifyItems, Items1),
     append(Items1, IndexicalItems, Items2),
-    append(Items2, EnumeratorItems, Items).
+    append(Items2, RecursiveIndexItems, Items3),
+    append(Items3, EnumeratorItems, Items).
 
 write_program(OutputPath, ProgramIR) :-
     setup_call_cleanup(

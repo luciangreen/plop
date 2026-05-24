@@ -1,6 +1,14 @@
 # plop
 
-Stage 1 (base-up data unfolding), stage 2 (memoisation), stage 3 (predicate-to-formula simplification), stage 4 (enumerator analysis), stage 5 (indexical mapping analysis), and stage 6 (subterm address system) from `pr3.txt` are implemented as a SWI-Prolog optimiser.
+Implemented stages from `pr3.txt`:
+
+- Stage 1: base-up data unfolding
+- Stage 2: memoisation
+- Stage 3: predicate-to-formula simplification
+- Stage 4: enumerator analysis
+- Stage 5: indexical mapping analysis
+- Stage 6: subterm address system
+- Stage 7: recursive index-loop analysis with `needed_subterms/3`
 
 ## Run tests
 
@@ -33,4 +41,15 @@ swipl -q -s optimiser.pl -g "optimise_file('examples/sum_to_n.pl','out/sum_to_n_
 ```prolog
 sum_to_n(N,S) :-
     S is N*(N+1)//2.
+```
+
+## Example — stage 7 (recursive index-loop analysis)
+
+`needed_subterms/3` reuses stage 6 addresses to fetch only requested nested values:
+
+```prolog
+?- needed_subterms(tree(tree(leaf(a), branch(b, c)), branch(d, e)),
+                   [[1, 2, 1], [2, 2]],
+                   Values).
+Values = [b, e].
 ```
