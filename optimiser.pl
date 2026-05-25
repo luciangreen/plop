@@ -12,6 +12,7 @@
 :- use_module(splice).
 :- use_module(loop_conversion).
 :- use_module(safety).
+:- use_module(grouped_subterms).
 
 optimise_file(InputFile, OutputFile) :-
     parse_file(InputFile, ProgramIR),
@@ -23,17 +24,21 @@ optimise_program(ProgramIR, OptimisedIR, optimisation_report(Items)) :-
     memoise_program(UnfoldedIR, MemoisedIR, MemoItems),
     simplify_program(MemoisedIR, SimplifiedIR, SimplifyItems),
     optimise_list_formulas(SimplifiedIR, ListFormulaIR, ListFormulaItems),
-    optimise_indexicals(ListFormulaIR, IndexicalIR, IndexicalItems),
-    optimise_recursive_index_loops(IndexicalIR, RecursiveIndexIR, RecursiveIndexItems),
-    splice_program(RecursiveIndexIR, SplicedIR, SpliceItems),
+optimise_indexicals(ListFormulaIR, IndexicalIR, IndexicalItems),
+
+rewrite_grouped_subterms(IndexicalIR, GroupedIR, GroupedItems),
+
+optimise_recursive_index_loops(GroupedIR, RecursiveIndexIR, RecursiveIndexItems),
+    splice_program(RecursiveIndexIR, SplicedIR, _SpliceItems),
     convert_deterministic_loops(SplicedIR, LoopIR, LoopItems),
     analyse_enumerators(ProgramIR, LoopIR, EnumeratorItems),
     append(UnfoldItems, MemoItems, Items0),
     append(Items0, SimplifyItems, Items1),
     append(Items1, ListFormulaItems, Items2),
     append(Items2, IndexicalItems, Items3),
-    append(Items3, RecursiveIndexItems, Items4),
-    append(Items4, SpliceItems, Items5),
+append(Items3, GroupedItems, Items4),
+
+append(Items4, RecursiveIndexItems, Items5),
     append(Items5, LoopItems, Items6),
     append(Items6, EnumeratorItems, Items7),
     enforce_stage17_safety(ProgramIR, LoopIR, Items7, OptimisedIR, Items).
@@ -43,17 +48,21 @@ optimise_predicate(PredicateNameArity, ProgramIR, OptimisedIR, optimisation_repo
     memoise_program(UnfoldedIR, MemoisedIR, MemoItems),
     simplify_program(MemoisedIR, SimplifiedIR, SimplifyItems),
     optimise_list_formulas(SimplifiedIR, ListFormulaIR, ListFormulaItems),
-    optimise_indexicals(ListFormulaIR, IndexicalIR, IndexicalItems),
-    optimise_recursive_index_loops(IndexicalIR, RecursiveIndexIR, RecursiveIndexItems),
-    splice_program(RecursiveIndexIR, SplicedIR, SpliceItems),
+optimise_indexicals(ListFormulaIR, IndexicalIR, IndexicalItems),
+
+rewrite_grouped_subterms(IndexicalIR, GroupedIR, GroupedItems),
+
+optimise_recursive_index_loops(GroupedIR, RecursiveIndexIR, RecursiveIndexItems),
+    splice_program(RecursiveIndexIR, SplicedIR, _SpliceItems),
     convert_deterministic_loops(SplicedIR, LoopIR, LoopItems),
     analyse_enumerators(ProgramIR, LoopIR, EnumeratorItems),
     append(UnfoldItems, MemoItems, Items0),
     append(Items0, SimplifyItems, Items1),
     append(Items1, ListFormulaItems, Items2),
     append(Items2, IndexicalItems, Items3),
-    append(Items3, RecursiveIndexItems, Items4),
-    append(Items4, SpliceItems, Items5),
+append(Items3, GroupedItems, Items4),
+
+append(Items4, RecursiveIndexItems, Items5),
     append(Items5, LoopItems, Items6),
     append(Items6, EnumeratorItems, Items7),
     enforce_stage17_safety(ProgramIR, LoopIR, Items7, OptimisedIR, Items).

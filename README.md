@@ -322,6 +322,26 @@ swipl -q -s optimiser.pl \
       print(Report)" \
   -t halt
 
+
+⸻
+
+Use this for the final optimised file:
+
+swipl -q -s optimiser.pl \
+  -g "optimiser:optimise_file('examples/matrix_reconstruct.pl','out/matrix_reconstruct_opt.pl')" \
+  -t halt
+
+Then view it:
+
+cat out/matrix_reconstruct_opt.pl
+
+Expected output shape:
+
+matrix_output(A,B) :-
+    subterm_with_address(A,[1],[C,D]),
+    subterm_with_address(A,[2,1],F),
+    B=[[C,D],F].
+    
 ⸻
 
 Licence
