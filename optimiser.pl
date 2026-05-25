@@ -1,4 +1,5 @@
 :- module(optimiser, [optimise_file/2, optimise_program/3, optimise_predicate/4]).
+:- reexport(parser, [parse_file/2]).
 
 :- use_module(parser).
 :- use_module(unfold).
