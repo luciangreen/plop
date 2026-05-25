@@ -161,8 +161,8 @@ test(detects_matrix_style_nth1_chain) :-
         ir_clause(c1, lookup(Matrix, I, J, X), [nth1(I, Matrix, Row), nth1(J, Row, X)], [])
     ],
     optimise_indexicals(ProgramIR, OptimisedIR, Report),
-    assertion(OptimisedIR = ProgramIR),
-    assertion(member(indexical_mapping(lookup/4, addr([I, J], X)), Report)).
+    assertion(OptimisedIR = [ir_clause(c1, lookup(Matrix, I, J, X), [subterm_with_address(Matrix, [I, J], X)], [])]),
+    assertion(member(indexical_mapping(lookup/4, addr(Matrix, [I, J], X)), Report)).
 
 test(detects_nested_nth0_chain) :-
     ProgramIR = [
@@ -171,14 +171,14 @@ test(detects_nested_nth0_chain) :-
             [])
     ],
     optimise_indexicals(ProgramIR, _OptimisedIR, Report),
-    assertion(member(indexical_mapping(value/5, addr([I, J, K], X)), Report)).
+    assertion(\+ member(indexical_mapping(value/5, _), Report)).
 
 test(optimise_program_includes_stage5_report_items) :-
     ProgramIR = [
         ir_clause(c1, lookup(Matrix, I, J, X), [nth1(I, Matrix, Row), nth1(J, Row, X)], [])
     ],
     optimise_program(ProgramIR, _OptimisedIR, optimisation_report(Report)),
-    assertion(member(indexical_mapping(lookup/4, addr([I, J], X)), Report)).
+    assertion(member(indexical_mapping(lookup/4, addr(Matrix, [I, J], X)), Report)).
 
 test(does_not_emit_mapping_for_single_level_nth) :-
     ProgramIR = [
@@ -186,6 +186,37 @@ test(does_not_emit_mapping_for_single_level_nth) :-
     ],
     optimise_indexicals(ProgramIR, _OptimisedIR, Report),
     assertion(Report = []).
+
+test(rewrite_index_chain_to_subterm_collects_source_aware_mappings) :-
+    Body = [nth1(I, Matrix, Row), nth1(J, Row, X)],
+    rewrite_index_chain_to_subterm(Body, NewBody, Mappings),
+    assertion(NewBody = [subterm_with_address(Matrix, [I, J], X)]),
+    assertion(Mappings = [addr(Matrix, [I, J], X)]).
+
+test(reconstruct_output_from_addresses_groups_full_output_shape) :-
+    reconstruct_output_from_addresses(
+        T,
+        [A, B],
+        [addr(T, [1, 1, 1], A), addr(T, [1, 1, 2], B)],
+        Goals
+    ),
+    assertion(Goals = [subterm_with_address(T, [1, 1], [A, B])]).
+
+test(reconstruct_output_from_addresses_groups_partial_output_shape) :-
+    reconstruct_output_from_addresses(
+        T,
+        [[A, B], C],
+        [addr(T, [1, 1, 1], A), addr(T, [1, 1, 2], B), addr(T, [2], C)],
+        Goals
+    ),
+    assertion(member(subterm_with_address(T, [1, 1], [A, B]), Goals)),
+    assertion(member(subterm_with_address(T, [2], C), Goals)).
+
+test(common_prefix_and_local_address_helpers_work) :-
+    common_address_prefix([[1, 1, 1], [1, 1, 2], [1, 1, 3]], Prefix),
+    local_address(Prefix, [1, 1, 3], Local),
+    assertion(Prefix == [1, 1]),
+    assertion(Local == [3]).
 
 :- end_tests(indexical).
 
@@ -647,7 +678,7 @@ test(report_text_formats_required_items) :-
         unfolded(p/2),
         memoised(q/1),
         formula_discovered(sum_to_n/2, n_times_n_plus_1_over_2),
-        indexical_mapping(lookup/4, addr([I, J], X)),
+        indexical_mapping(lookup/4, addr(M, [I, J], X)),
         loop_converted(seq_sum/2),
         skipped(r/3, unsafe)
     ]),
@@ -655,7 +686,7 @@ test(report_text_formats_required_items) :-
     assertion(sub_string(Text, _, _, _, 'unfolded: p/2')),
     assertion(sub_string(Text, _, _, _, 'memoised: q/1')),
     assertion(sub_string(Text, _, _, _, 'formula_discovered: sum_to_n/2 => n_times_n_plus_1_over_2')),
-    assertion(sub_string(Text, _, _, _, 'indexical_mapping: lookup/4 => addr([')),
+    assertion(sub_string(Text, _, _, _, 'indexical_mapping: lookup/4 => addr(')),
     assertion(sub_string(Text, _, _, _, 'loop_converted: seq_sum/2')),
     assertion(sub_string(Text, _, _, _, 'skipped: r/3 (unsafe)')).
 
