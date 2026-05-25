@@ -200,6 +200,7 @@ safe_predicate(flatten/2).
 safe_predicate(between/3).
 safe_predicate(succ/2).
 safe_predicate(plus/3).
+safe_predicate(subterm_with_address/3).
 safe_predicate(max_list/2).
 safe_predicate(min_list/2).
 safe_predicate(sum_list/2).

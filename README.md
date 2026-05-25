@@ -218,7 +218,7 @@ nth1(J, Row, X)
 
 Internal representation:
 
-addr([I,J], X)
+addr(Matrix, [I,J], X)
 
 ⸻
 
