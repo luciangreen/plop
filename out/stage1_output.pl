@@ -1,3 +1,3 @@
-inc(_52,_54):-_54 is _52+1.
-double(_70,_72):-_72 is _70*2.
-combined(_88,_90):-_90 is (_88+1)*2.
+inc(A,B):-B is A+1.
+double(A,B):-B is A*2.
+combined(A,B):-B is (A+1)*2.

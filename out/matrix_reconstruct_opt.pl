@@ -1,1 +1,1 @@
-matrix_output(_52,_54):-subterm_with_address(_52,[1],[_70,_78]),subterm_with_address(_52,[2,1],_94),_54=[[_70,_78],_94].
+matrix_output(A,B):-subterm_with_address(A,[1],[C,D]),subterm_with_address(A,[2,1],E),B=[[C,D],E].
