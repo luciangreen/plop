@@ -77,7 +77,9 @@ write_program(OutputPath, ProgramIR) :-
 write_ir_program(_, []) :- !.
 write_ir_program(Stream, [Clause | Rest]) :-
     ir_clause_term(Clause, Term),
-    write_term(Stream, Term, [fullstop(true), nl(true)]),
+    copy_term(Term, TermCopy),
+    numbervars(TermCopy, 0, _),
+    write_term(Stream, TermCopy, [fullstop(true), nl(true), numbervars(true)]),
     write_ir_program(Stream, Rest).
 
 ir_clause_term(ir_clause(_, Head, [], _), Head).

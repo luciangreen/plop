@@ -1,3 +1,3 @@
-inc(_1346,_1348):-_1348 is _1346+1.
-double(_1378,_1380):-_1380 is _1378*2.
-combined(_1410,_1412):-_1412 is (_1410+1)*2.
+inc(A,B):-B is A+1.
+double(A,B):-B is A*2.
+combined(A,B):-B is (A+1)*2.
