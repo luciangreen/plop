@@ -95,8 +95,9 @@ chain_mappings_from_roots([RootEdge | RestRoots], Edges, Mappings) :-
 
 paths_to_mappings(_, [], []).
 paths_to_mappings(Source, [path(Address, Value, Positions) | Rest], [mapping(Source, Address, Value, StartPosition, Positions) | RestMappings]) :-
+    minimum_index_chain_length(MinChainLength),
     length(Address, Len),
-    Len >= 2,
+    Len >= MinChainLength,
     Positions = [StartPosition | _],
     !,
     paths_to_mappings(Source, Rest, RestMappings).
@@ -160,7 +161,8 @@ rewrite_output_construction(Body, Mappings, FinalBody) :-
         OutputGoals \= [],
         term_variables(OutputTerm, OutputVars),
         remove_individual_output_lookups(RestBody, Source, OutputVars, PrunedBody),
-        (   OutputGoals = [subterm_with_address(Source, Prefix, OutputTerm)]
+        (   OutputGoals = [subterm_with_address(Source, Prefix, OutputTerm)],
+            \+ variable_occurs_in_goals(OutputVar, PrunedBody)
         ->  ReplacementGoals = [subterm_with_address(Source, Prefix, OutputVar)]
         ;   append(OutputGoals, [OutputGoal], ReplacementGoals)
         ),
@@ -204,6 +206,12 @@ variable_source(Var, [addr(Source, _Address, Value) | _], Source) :-
 variable_source(Var, [_ | Rest], Source) :-
     variable_source(Var, Rest, Source).
 
+variable_occurs_in_goals(Var, Goals) :-
+    member(Goal, Goals),
+    term_variables(Goal, GoalVars),
+    var_member_eq(Var, GoalVars),
+    !.
+
 remove_individual_output_lookups([], _, _, []).
 remove_individual_output_lookups([Goal | Rest], Source, Vars, Pruned) :-
     Goal = subterm_with_address(GoalSource, _Address, Value),
@@ -232,13 +240,19 @@ group_address_lookups(Lookups, GroupedLookups) :-
     ),
     length(IndexedValues, LookupCount),
     length(Lookups, LookupCount),
-    LookupCount > 1,
+    minimum_group_size(MinGroupSize),
+    LookupCount >= MinGroupSize,
     sort(IndexedValues, SortedIndexedValues),
-    contiguous_indices(SortedIndexedValues, 1),
+    nth1_start_index(StartIndex),
+    contiguous_indices(SortedIndexedValues, StartIndex),
     values_from_indexed_pairs(SortedIndexedValues, Values),
     !,
     GroupedLookups = [subterm_with_address(Source, Prefix, Values)].
 group_address_lookups(Lookups, Lookups).
+
+minimum_index_chain_length(2).
+minimum_group_size(2).
+nth1_start_index(1).
 
 all_lookup_sources_same([subterm_with_address(Source, _, _) | Rest], Source) :-
     all_lookup_sources_same_(Rest, Source).
@@ -316,8 +330,10 @@ mapped_variable_addresses(Source, [Var | Rest], Mappings, [Address-Var | RestPai
         ),
         Matches
     ),
-    Matches = [Address],
+    single_address_match(Matches, Address),
     mapped_variable_addresses(Source, Rest, Mappings, RestPairs).
+
+single_address_match([Address], Address).
 
 output_variable_leaf_addresses(Term, Path, [Path-Term]) :-
     var(Term),
@@ -359,8 +375,6 @@ output_term_groupable(Term) :-
     is_list(Term),
     !,
     output_term_groupable_list(Term).
-output_term_groupable([]) :-
-    !.
 output_term_groupable(Term) :-
     compound(Term),
     !,

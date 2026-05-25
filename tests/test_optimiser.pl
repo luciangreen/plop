@@ -218,6 +218,18 @@ test(common_prefix_and_local_address_helpers_work) :-
     assertion(Prefix == [1, 1]),
     assertion(Local == [3]).
 
+test(optimise_indexicals_reconstructs_output_directly_when_shape_matches) :-
+    ProgramIR = [
+        ir_clause(
+            c1,
+            make_output(T, Output),
+            [nth1(1, T, R1), nth1(1, R1, R2), nth1(1, R2, A), nth1(2, R2, B), Output = [A, B]],
+            []
+        )
+    ],
+    optimise_indexicals(ProgramIR, OptimisedIR, _Report),
+    assertion(OptimisedIR = [ir_clause(c1, make_output(T, Output), [subterm_with_address(T, [1, 1], Output)], [])]).
+
 :- end_tests(indexical).
 
 :- begin_tests(subterm_address).
