@@ -1065,15 +1065,14 @@ function dedupeBody(body, knownIds) {
   let changed = false;
   const known = new Set(knownIds);
 
-  for (const goal of body) {
+  for (let idx = 0; idx < body.length; idx++) {
+    const goal = body[idx];
     if (isSafeMemo(goal) && goal.t === 'c') {
       const bindings = findDup(goal, seen, known);
       if (bindings !== null) {
-        // Apply bindings to remaining (we modify body in place via subst)
-        // Substitute all future goals
-        const substFn = g => subst(g, bindings);
-        for (let j = 0; j < result.length; j++) result[j] = substFn(result[j]);
-        for (let j = body.indexOf(goal) + 1; j < body.length; j++) body[j] = substFn(body[j]);
+        // Apply bindings to remaining body goals (tracked by index) and already-built result
+        for (let j = idx + 1; j < body.length; j++) body[j] = subst(body[j], bindings);
+        for (let j = 0; j < result.length; j++) result[j] = subst(result[j], bindings);
         changed = true;
         continue;
       }
@@ -1330,9 +1329,16 @@ function verifyFormula(formulaStr, refFn, start, end) {
     : { ok: false, failures };
 }
 
+// Validate that a formula string contains only safe mathematical tokens:
+// digits, dots, 'n', arithmetic operators, parentheses, and whitespace.
+function isSafeFormula(s) {
+  return /^[0-9n+\-*\/^.()\s]+$/.test(s);
+}
+
 function compileFormula(s) {
+  if (!isSafeFormula(s)) return null;
   try {
-    // Replace ^ with ** for JS, n*(n+1)/2 etc. are already valid JS
+    // Replace ^ with ** for JavaScript exponentiation
     const js = s.replace(/\^/g, '**');
     // eslint-disable-next-line no-new-func
     const fn = new Function('n', `return ${js};`);
@@ -1702,6 +1708,11 @@ function runVerify() {
 
   if (!formulaStr) { outEl.innerHTML = '<p class="empty-state">Enter a formula.</p>'; return; }
   const refStr = fnStr || formulaStr;
+
+  if (!isSafeFormula(refStr)) {
+    outEl.innerHTML = '<p style="color:#f08080">Reference function contains disallowed characters. Only digits, <code>n</code>, and arithmetic operators (<code>+&nbsp;-&nbsp;*&nbsp;/&nbsp;^&nbsp;()</code>) are permitted.</p>';
+    return;
+  }
 
   let refFn;
   try {
