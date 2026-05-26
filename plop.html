@@ -245,7 +245,7 @@
       <h2>Input Program</h2>
       <textarea id="opt-input" rows="16" placeholder="Enter Prolog program here…"></textarea>
       <div class="btn-row">
-        <button class="primary" onclick="runOptimiser()">▶ Optimise</button>
+        <button class="primary" onclick="runOptimiser()" aria-label="Run optimiser">▶ Optimise</button>
         <button class="secondary" onclick="clearOpt()">Clear</button>
       </div>
     </div>
@@ -271,7 +271,7 @@
       <span class="field-label">Augmented matrix rows (last column = RHS):</span>
       <textarea id="gauss-input" rows="10" placeholder="1 1 1 6&#10;1 2 4 14&#10;1 3 9 30"></textarea>
       <div class="btn-row">
-        <button class="primary" onclick="runGauss()">▶ Eliminate</button>
+        <button class="primary" onclick="runGauss()" aria-label="Run Gaussian elimination">▶ Eliminate</button>
         <button class="ex-btn" onclick="loadGaussExample('poly2')">Quadratic example</button>
         <button class="ex-btn" onclick="loadGaussExample('linear')">Linear example</button>
       </div>
@@ -288,7 +288,7 @@
     </div>
     <input type="text" id="poly-samples" placeholder="1, 4, 9, 16, 25" style="max-width:360px"/>
     <div class="btn-row">
-      <button class="primary" onclick="runPolyFit()">▶ Fit Polynomial</button>
+      <button class="primary" onclick="runPolyFit()" aria-label="Fit polynomial">▶ Fit Polynomial</button>
     </div>
     <div id="poly-output" style="margin-top:14px">
       <p class="empty-state">Result will appear here…</p>
@@ -306,7 +306,7 @@
     <span class="field-label">Values (comma-separated, n=1,2,3,…):</span>
     <input type="text" id="seq-input" placeholder="1, 3, 6, 10, 15" style="max-width:400px"/>
     <div class="btn-row" style="margin-top:12px">
-      <button class="primary" onclick="runFormulaDiscovery()">▶ Discover Formula</button>
+      <button class="primary" onclick="runFormulaDiscovery()" aria-label="Discover formula">▶ Discover Formula</button>
       <button class="ex-btn" onclick="document.getElementById('seq-input').value='1,3,6,10,15'">Triangular</button>
       <button class="ex-btn" onclick="document.getElementById('seq-input').value='1,4,9,16,25'">Squares</button>
       <button class="ex-btn" onclick="document.getElementById('seq-input').value='1,3,5,7,9'">Odd numbers</button>
@@ -334,7 +334,7 @@
     <span class="field-label">Reference function (JavaScript, receives n):</span>
     <input type="text" id="verify-fn" placeholder="n*(n+1)/2" style="max-width:360px;margin-bottom:8px"/>
     <div class="btn-row">
-      <button class="primary" onclick="runVerify()">▶ Verify</button>
+      <button class="primary" onclick="runVerify()" aria-label="Verify formula">▶ Verify</button>
     </div>
     <div id="verify-output" style="margin-top:14px">
       <p class="empty-state">Result will appear here…</p>
@@ -352,7 +352,7 @@
       <h2>Program</h2>
       <textarea id="safety-input" rows="14" placeholder="Enter Prolog program here…"></textarea>
       <div class="btn-row">
-        <button class="primary" onclick="runSafety()">▶ Analyse Safety</button>
+        <button class="primary" onclick="runSafety()" aria-label="Analyse safety">▶ Analyse Safety</button>
         <button class="ex-btn" onclick="loadSafetyExample()">Load example</button>
       </div>
     </div>
@@ -373,7 +373,7 @@
     <span class="field-label">Enter report items as a JSON array:</span>
     <textarea id="reporter-input" rows="10" placeholder='[{"type":"unfolded","pred":"combined/2"},{"type":"memoised","pred":"p/3"},{"type":"formula_discovered","pred":"sum_to_n/2","formula":"n_times_n_plus_1_over_2"}]'></textarea>
     <div class="btn-row">
-      <button class="primary" onclick="runReporter()">▶ Format Report</button>
+      <button class="primary" onclick="runReporter()" aria-label="Format report">▶ Format Report</button>
       <button class="ex-btn" onclick="loadReporterExample()">Load example</button>
     </div>
   </div>
@@ -1628,8 +1628,10 @@ function runGauss() {
 
   // Build HTML table
   const colCount = reduced[0] ? reduced[0].length : 0;
-  const headers = Array.from({ length: colCount - 1 }, (_, i) => `x<sub>${i+1}</sub>`).concat(['RHS']);
-  let html = '<table><thead><tr>' + headers.map(h => `<th>${h}</th>`).join('') + '</tr></thead><tbody>';
+  const headers = Array.from({ length: colCount - 1 }, (_, i) =>
+    `<th scope="col" aria-label="x${i+1}">x<sub>${i+1}</sub></th>`
+  ).concat(['<th scope="col">RHS</th>']);
+  let html = '<table><thead><tr>' + headers.join('') + '</tr></thead><tbody>';
   for (const row of reduced) {
     html += '<tr>' + row.map(v => `<td>${fmtNum(v)}</td>`).join('') + '</tr>';
   }
@@ -1641,7 +1643,7 @@ function runGauss() {
     html += '<p style="margin-top:12px;color:#8ab4f8;font-size:0.85rem;font-weight:600">Solution:</p>';
     for (let i = 0; i < vars && i < reduced.length; i++) {
       const rhs = reduced[i][colCount - 1];
-      html += `<div style="font-family:monospace;font-size:0.85rem;color:#c8deff;margin:2px 0">x<sub>${i+1}</sub> = ${fmtNum(rhs)}</div>`;
+      html += `<div style="font-family:monospace;font-size:0.85rem;color:#c8deff;margin:2px 0" aria-label="x${i+1} = ${fmtNum(rhs)}">x<sub>${i+1}</sub> = ${fmtNum(rhs)}</div>`;
     }
   }
   outEl.innerHTML = html;
@@ -1662,7 +1664,7 @@ function runPolyFit() {
       const fs = formulaString(coeffs);
       html += `<div style="color:#e3b341;font-family:monospace;font-size:1rem;margin-bottom:8px">f(n) = ${escHtml(fs)}</div>`;
       html += `<div style="color:#7a8aaa;font-size:0.82rem">Degree: ${deg}</div>`;
-      html += `<div style="color:#7a8aaa;font-size:0.82rem">Coefficients [c₀,c₁,...]: [${coeffs.map(c => fmtNum(c)).join(', ')}]</div>`;
+      html += `<div style="color:#7a8aaa;font-size:0.82rem">Coefficients [c0, c1, ...]: [${coeffs.map(c => fmtNum(c)).join(', ')}]</div>`;
       found = true;
       break;
     }
@@ -1692,7 +1694,7 @@ function runFormulaDiscovery() {
   }).join('');
   outEl.innerHTML = `
     <div style="color:#e3b341;font-family:monospace;font-size:1.1rem;margin-bottom:12px">f(n) = ${escHtml(result.formula)}</div>
-    <div style="color:#7a8aaa;font-size:0.82rem;margin-bottom:10px">Degree: ${result.coeffs.length - 1} | Coefficients: [${result.coeffs.map(c=>fmtNum(c)).join(', ')}]</div>
+    <div style="color:#7a8aaa;font-size:0.82rem;margin-bottom:10px">Degree: ${result.coeffs.length - 1} | Coefficients [c0, c1, ...]: [${result.coeffs.map(c=>fmtNum(c)).join(', ')}]</div>
     <table>
       <thead><tr><th>n</th><th>Sample</th><th>f(n)</th><th>✓</th></tr></thead>
       <tbody>${table}</tbody>
