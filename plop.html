@@ -1,0 +1,1836 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Plop – Prolog Optimiser (Web)</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #0f1117;
+      color: #e0e0e0;
+      min-height: 100vh;
+    }
+
+    header {
+      background: linear-gradient(135deg, #1a1f2e 0%, #16213e 100%);
+      border-bottom: 1px solid #2a3a5c;
+      padding: 18px 32px;
+      display: flex;
+      align-items: baseline;
+      gap: 16px;
+    }
+    header h1 { font-size: 1.6rem; color: #6eb5ff; letter-spacing: 1px; }
+    header p  { font-size: 0.85rem; color: #7a8aaa; }
+
+    nav {
+      display: flex;
+      gap: 2px;
+      background: #12151e;
+      border-bottom: 1px solid #1e2a40;
+      padding: 0 24px;
+      overflow-x: auto;
+    }
+    nav button {
+      background: none;
+      border: none;
+      color: #7a8aaa;
+      cursor: pointer;
+      padding: 12px 20px;
+      font-size: 0.9rem;
+      border-bottom: 2px solid transparent;
+      white-space: nowrap;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    nav button:hover { color: #c0d0f0; }
+    nav button.active { color: #6eb5ff; border-bottom-color: #6eb5ff; }
+
+    .tab-content { display: none; padding: 28px 32px; }
+    .tab-content.active { display: block; }
+
+    .panel {
+      background: #161b28;
+      border: 1px solid #253048;
+      border-radius: 10px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+    .panel h2 {
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: #8ab4f8;
+      margin-bottom: 14px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+    @media (max-width: 800px) { .two-col { grid-template-columns: 1fr; } }
+
+    textarea, input[type="text"], input[type="number"] {
+      width: 100%;
+      background: #0d111c;
+      border: 1px solid #2a3a5c;
+      border-radius: 6px;
+      color: #d0e0ff;
+      font-family: 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+      font-size: 0.88rem;
+      padding: 10px 12px;
+      resize: vertical;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    textarea:focus, input:focus { border-color: #4a7ae0; }
+
+    select {
+      background: #0d111c;
+      border: 1px solid #2a3a5c;
+      border-radius: 6px;
+      color: #d0e0ff;
+      font-size: 0.88rem;
+      padding: 8px 10px;
+      outline: none;
+      cursor: pointer;
+    }
+
+    .btn-row {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      margin-top: 12px;
+      flex-wrap: wrap;
+    }
+
+    button.primary {
+      background: #1e4db7;
+      border: 1px solid #2a62d4;
+      border-radius: 6px;
+      color: #e0ecff;
+      cursor: pointer;
+      font-size: 0.9rem;
+      font-weight: 600;
+      padding: 9px 22px;
+      transition: background 0.15s;
+    }
+    button.primary:hover { background: #2557cc; }
+    button.primary:active { background: #1840a0; }
+
+    button.secondary {
+      background: #1a2235;
+      border: 1px solid #2a3a5c;
+      border-radius: 6px;
+      color: #9ab0d0;
+      cursor: pointer;
+      font-size: 0.85rem;
+      padding: 8px 16px;
+      transition: background 0.15s;
+    }
+    button.secondary:hover { background: #1e2a40; }
+
+    label { font-size: 0.82rem; color: #7a8aaa; }
+    .field-label { font-size: 0.82rem; color: #7a8aaa; display: block; margin-bottom: 6px; }
+
+    pre {
+      background: #0d111c;
+      border: 1px solid #1e2a40;
+      border-radius: 6px;
+      color: #c8deff;
+      font-family: 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+      font-size: 0.87rem;
+      line-height: 1.6;
+      padding: 14px;
+      overflow: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+      min-height: 60px;
+    }
+
+    .report-box {
+      background: #0d1520;
+      border: 1px solid #1a2a3a;
+      border-radius: 6px;
+      font-family: 'Fira Code', monospace;
+      font-size: 0.84rem;
+      padding: 10px 14px;
+      min-height: 40px;
+      white-space: pre-wrap;
+    }
+    .report-box .r-unfolded   { color: #7ec8a0; }
+    .report-box .r-memoised   { color: #79b8ff; }
+    .report-box .r-formula    { color: #e3b341; }
+    .report-box .r-skipped    { color: #f08080; }
+    .report-box .r-unknown    { color: #aaaaaa; }
+
+    .badge {
+      display: inline-block;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      padding: 2px 8px;
+      margin-left: 8px;
+    }
+    .badge-safe    { background: #0d3320; color: #3ddc84; }
+    .badge-unsafe  { background: #3a1010; color: #f08080; }
+    .badge-unknown { background: #252525; color: #aaaaaa; }
+
+    .safety-row {
+      display: flex;
+      align-items: center;
+      padding: 5px 0;
+      border-bottom: 1px solid #1e2a40;
+      gap: 10px;
+      font-family: 'Fira Code', monospace;
+      font-size: 0.85rem;
+    }
+    .safety-row:last-child { border-bottom: none; }
+
+    table { width: 100%; border-collapse: collapse; font-family: monospace; font-size: 0.85rem; }
+    th { background: #1a2235; color: #8ab4f8; padding: 8px 10px; text-align: right; border: 1px solid #1e2a40; }
+    td { color: #c8deff; padding: 7px 10px; text-align: right; border: 1px solid #1e2a40; }
+    tr:hover td { background: #131825; }
+
+    .empty-state { color: #3a4a6a; font-size: 0.9rem; font-style: italic; text-align: center; padding: 20px; }
+
+    .info-strip {
+      background: #111a30;
+      border: 1px solid #1e3a60;
+      border-radius: 6px;
+      color: #6a9ad0;
+      font-size: 0.82rem;
+      padding: 8px 14px;
+      margin-bottom: 14px;
+    }
+
+    .section-title { font-size: 0.82rem; color: #6a8aaa; margin: 14px 0 6px; font-weight: 600; }
+
+    .examples-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+    .ex-btn { background: #132040; border: 1px solid #1e3560; border-radius: 5px; color: #79b8ff; cursor: pointer; font-size: 0.8rem; padding: 5px 12px; }
+    .ex-btn:hover { background: #1a2a50; }
+  </style>
+</head>
+<body>
+<header>
+  <h1>🔧 Plop</h1>
+  <p>Prolog Source-to-Source Optimiser — JavaScript Web Version</p>
+</header>
+
+<nav>
+  <button class="active" onclick="showTab('optimiser',this)">Optimiser</button>
+  <button onclick="showTab('gaussian',this)">Gaussian Elimination</button>
+  <button onclick="showTab('formula',this)">Formula Discovery</button>
+  <button onclick="showTab('safety',this)">Safety Analysis</button>
+  <button onclick="showTab('reporter',this)">Reporter</button>
+</nav>
+
+<!-- ===== OPTIMISER TAB ===== -->
+<div id="tab-optimiser" class="tab-content active">
+  <div class="info-strip">
+    Parse a Prolog program and run the optimisation pipeline: Stage 1 (Unfolding) → Stage 2 (Memoisation) → Stage 3 (Formula Simplification).
+  </div>
+  <div class="examples-row">
+    <span style="color:#4a6080;font-size:0.8rem;align-self:center">Examples:</span>
+    <button class="ex-btn" onclick="loadExample('stage1')">Stage 1 – Unfolding</button>
+    <button class="ex-btn" onclick="loadExample('stage2')">Stage 2 – Memoisation</button>
+    <button class="ex-btn" onclick="loadExample('stage3')">Stage 3 – Sum Formula</button>
+    <button class="ex-btn" onclick="loadExample('combined')">Combined</button>
+  </div>
+  <div class="two-col">
+    <div class="panel">
+      <h2>Input Program</h2>
+      <textarea id="opt-input" rows="16" placeholder="Enter Prolog program here…"></textarea>
+      <div class="btn-row">
+        <button class="primary" onclick="runOptimiser()">▶ Optimise</button>
+        <button class="secondary" onclick="clearOpt()">Clear</button>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Optimised Output</h2>
+      <pre id="opt-output" class="empty-state">Output will appear here…</pre>
+    </div>
+  </div>
+  <div class="panel">
+    <h2>Optimisation Report</h2>
+    <div id="opt-report" class="report-box empty-state">No report yet.</div>
+  </div>
+</div>
+
+<!-- ===== GAUSSIAN TAB ===== -->
+<div id="tab-gaussian" class="tab-content">
+  <div class="info-strip">
+    Perform Gauss-Jordan elimination on an augmented matrix. Enter one row per line, values separated by spaces or commas.
+  </div>
+  <div class="two-col">
+    <div class="panel">
+      <h2>Input Matrix</h2>
+      <span class="field-label">Augmented matrix rows (last column = RHS):</span>
+      <textarea id="gauss-input" rows="10" placeholder="1 1 1 6&#10;1 2 4 14&#10;1 3 9 30"></textarea>
+      <div class="btn-row">
+        <button class="primary" onclick="runGauss()">▶ Eliminate</button>
+        <button class="ex-btn" onclick="loadGaussExample('poly2')">Quadratic example</button>
+        <button class="ex-btn" onclick="loadGaussExample('linear')">Linear example</button>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Reduced Matrix</h2>
+      <div id="gauss-output"><p class="empty-state">Result will appear here…</p></div>
+    </div>
+  </div>
+  <div class="panel">
+    <h2>Polynomial Fit</h2>
+    <div class="btn-row" style="margin-bottom:12px">
+      <span class="field-label" style="margin:0">Sample values (comma-separated, indexed from 1):</span>
+    </div>
+    <input type="text" id="poly-samples" placeholder="1, 4, 9, 16, 25" style="max-width:360px"/>
+    <div class="btn-row">
+      <button class="primary" onclick="runPolyFit()">▶ Fit Polynomial</button>
+    </div>
+    <div id="poly-output" style="margin-top:14px">
+      <p class="empty-state">Result will appear here…</p>
+    </div>
+  </div>
+</div>
+
+<!-- ===== FORMULA DISCOVERY TAB ===== -->
+<div id="tab-formula" class="tab-content">
+  <div class="info-strip">
+    Given a sequence of sample values, infer the closed-form polynomial formula that generates them (implements <code>infer_sequence_formula/2</code>).
+  </div>
+  <div class="panel">
+    <h2>Sequence Samples</h2>
+    <span class="field-label">Values (comma-separated, n=1,2,3,…):</span>
+    <input type="text" id="seq-input" placeholder="1, 3, 6, 10, 15" style="max-width:400px"/>
+    <div class="btn-row" style="margin-top:12px">
+      <button class="primary" onclick="runFormulaDiscovery()">▶ Discover Formula</button>
+      <button class="ex-btn" onclick="document.getElementById('seq-input').value='1,3,6,10,15'">Triangular</button>
+      <button class="ex-btn" onclick="document.getElementById('seq-input').value='1,4,9,16,25'">Squares</button>
+      <button class="ex-btn" onclick="document.getElementById('seq-input').value='1,3,5,7,9'">Odd numbers</button>
+      <button class="ex-btn" onclick="document.getElementById('seq-input').value='1,2,3,4,5'">Identity</button>
+      <button class="ex-btn" onclick="document.getElementById('seq-input').value='1,8,27,64,125'">Cubes</button>
+    </div>
+    <div id="formula-output" style="margin-top:20px">
+      <p class="empty-state">Result will appear here…</p>
+    </div>
+  </div>
+  <div class="panel">
+    <h2>Formula Verification</h2>
+    <span class="field-label">Formula (e.g. <code>n*(n+1)/2</code>):</span>
+    <input type="text" id="verify-formula" placeholder="n*(n+1)/2" style="max-width:300px; margin-bottom:8px"/>
+    <div style="display:flex;gap:12px;align-items:center;margin-bottom:8px">
+      <div>
+        <span class="field-label">Start n:</span>
+        <input type="number" id="verify-start" value="1" style="max-width:80px"/>
+      </div>
+      <div>
+        <span class="field-label">End n:</span>
+        <input type="number" id="verify-end" value="20" style="max-width:80px"/>
+      </div>
+    </div>
+    <span class="field-label">Reference function (JavaScript, receives n):</span>
+    <input type="text" id="verify-fn" placeholder="n*(n+1)/2" style="max-width:360px;margin-bottom:8px"/>
+    <div class="btn-row">
+      <button class="primary" onclick="runVerify()">▶ Verify</button>
+    </div>
+    <div id="verify-output" style="margin-top:14px">
+      <p class="empty-state">Result will appear here…</p>
+    </div>
+  </div>
+</div>
+
+<!-- ===== SAFETY TAB ===== -->
+<div id="tab-safety" class="tab-content">
+  <div class="info-strip">
+    Classify each goal in a Prolog program body as <strong>safe</strong>, <strong>unsafe</strong>, or <strong>unknown</strong> (implements <code>classify_goal_safety/2</code> and <code>classify_body_safety/2</code>).
+  </div>
+  <div class="two-col">
+    <div class="panel">
+      <h2>Program</h2>
+      <textarea id="safety-input" rows="14" placeholder="Enter Prolog program here…"></textarea>
+      <div class="btn-row">
+        <button class="primary" onclick="runSafety()">▶ Analyse Safety</button>
+        <button class="ex-btn" onclick="loadSafetyExample()">Load example</button>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Safety Classification</h2>
+      <div id="safety-output"><p class="empty-state">Result will appear here…</p></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== REPORTER TAB ===== -->
+<div id="tab-reporter" class="tab-content">
+  <div class="info-strip">
+    Format optimisation report items into human-readable text (implements <code>report_lines/2</code>, <code>report_text/2</code>, <code>print_report/1</code>).
+  </div>
+  <div class="panel">
+    <h2>Report Items (JSON)</h2>
+    <span class="field-label">Enter report items as a JSON array:</span>
+    <textarea id="reporter-input" rows="10" placeholder='[{"type":"unfolded","pred":"combined/2"},{"type":"memoised","pred":"p/3"},{"type":"formula_discovered","pred":"sum_to_n/2","formula":"n_times_n_plus_1_over_2"}]'></textarea>
+    <div class="btn-row">
+      <button class="primary" onclick="runReporter()">▶ Format Report</button>
+      <button class="ex-btn" onclick="loadReporterExample()">Load example</button>
+    </div>
+  </div>
+  <div class="panel">
+    <h2>Formatted Report</h2>
+    <div id="reporter-output"><p class="empty-state">Result will appear here…</p></div>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+// ============================================================
+// 1. TERM REPRESENTATION
+// ============================================================
+
+let _gVarCounter = 0;
+function freshId() { return ++_gVarCounter; }
+
+function mkAtom(n) { return { t: 'a', n }; }
+function mkNum(v)  { return { t: 'n', v }; }
+function mkVar(n)  { return { t: 'v', n, id: freshId() }; }
+function mkComp(f, a) { return { t: 'c', f, a }; }
+
+const ATOM_NIL = mkAtom('[]');
+
+function mkListTerm(elements, tail) {
+  let result = tail || ATOM_NIL;
+  for (let i = elements.length - 1; i >= 0; i--)
+    result = mkComp('.', [elements[i], result]);
+  return result;
+}
+
+// ============================================================
+// 2. TERM UTILITIES
+// ============================================================
+
+function termEq(t1, t2) {
+  if (t1 === t2) return true;
+  if (t1.t !== t2.t) return false;
+  switch (t1.t) {
+    case 'a': return t1.n === t2.n;
+    case 'n': return t1.v === t2.v;
+    case 'v': return t1.id === t2.id;
+    case 'c':
+      if (t1.f !== t2.f || t1.a.length !== t2.a.length) return false;
+      return t1.a.every((a, i) => termEq(a, t2.a[i]));
+  }
+  return false;
+}
+
+function walk(term, env) {
+  while (term.t === 'v' && env.has(term.id))
+    term = env.get(term.id);
+  return term;
+}
+
+function unify(t1, t2, env) {
+  t1 = walk(t1, env); t2 = walk(t2, env);
+  if (t1 === t2) return env;
+  if (t1.t === 'v' && t2.t === 'v' && t1.id === t2.id) return env;
+  if (t1.t === 'v') { const e = new Map(env); e.set(t1.id, t2); return e; }
+  if (t2.t === 'v') { const e = new Map(env); e.set(t2.id, t1); return e; }
+  if (t1.t === 'a' && t2.t === 'a') return t1.n === t2.n ? env : null;
+  if (t1.t === 'n' && t2.t === 'n') return t1.v === t2.v ? env : null;
+  if (t1.t === 'c' && t2.t === 'c') {
+    if (t1.f !== t2.f || t1.a.length !== t2.a.length) return null;
+    let e = env;
+    for (let i = 0; i < t1.a.length; i++) {
+      e = unify(t1.a[i], t2.a[i], e);
+      if (!e) return null;
+    }
+    return e;
+  }
+  return null;
+}
+
+function subst(term, env) {
+  term = walk(term, env);
+  if (term.t !== 'c') return term;
+  const newA = term.a.map(a => subst(a, env));
+  if (newA.every((a, i) => a === term.a[i])) return term;
+  return mkComp(term.f, newA);
+}
+
+function freshenTerm(term, map) {
+  if (term.t === 'v') {
+    if (!map.has(term.id)) map.set(term.id, mkVar(term.n));
+    return map.get(term.id);
+  }
+  if (term.t === 'c') return mkComp(term.f, term.a.map(a => freshenTerm(a, map)));
+  return term;
+}
+
+function freshenClause(clause) {
+  const map = new Map();
+  return {
+    ...clause,
+    head: freshenTerm(clause.head, map),
+    body: clause.body.map(g => freshenTerm(g, map))
+  };
+}
+
+function collectVarsOrdered(term, seen, out) {
+  if (term.t === 'v') {
+    if (!seen.has(term.id)) { seen.add(term.id); out.push(term); }
+  } else if (term.t === 'c') {
+    for (const a of term.a) collectVarsOrdered(a, seen, out);
+  }
+}
+
+function clauseVars(clause) {
+  const seen = new Set(), out = [];
+  collectVarsOrdered(clause.head, seen, out);
+  for (const g of clause.body) collectVarsOrdered(g, seen, out);
+  return out;
+}
+
+function termVars(term) {
+  const seen = new Set(), out = [];
+  collectVarsOrdered(term, seen, out);
+  return out;
+}
+
+function getFunctor(head) {
+  if (head.t === 'c') return `${head.f}/${head.a.length}`;
+  if (head.t === 'a') return `${head.n}/0`;
+  return null;
+}
+
+function getGoalFunctor(goal) {
+  if (goal.t === 'c') return `${goal.f}/${goal.a.length}`;
+  if (goal.t === 'a') return `${goal.n}/0`;
+  return null;
+}
+
+function irEqual(ir1, ir2) {
+  if (ir1.length !== ir2.length) return false;
+  return ir1.every((c, i) =>
+    c.id === ir2[i].id &&
+    termEq(c.head, ir2[i].head) &&
+    c.body.length === ir2[i].body.length &&
+    c.body.every((g, j) => termEq(g, ir2[i].body[j]))
+  );
+}
+
+// ============================================================
+// 3. TERM TO STRING
+// ============================================================
+
+// Operator table: binary operators
+const BIN_OPS = {
+  ':-':   { prec: 1200, lp: 1199, rp: 1199 },
+  ';':    { prec: 1100, lp: 1099, rp: 1100 },
+  '->':   { prec: 1050, lp: 1049, rp: 1050 },
+  ',':    { prec: 1000, lp:  999, rp: 1000 },
+  '\\+':  null, // prefix only
+  'is':   { prec:  700, lp:  699, rp:  699 },
+  '=':    { prec:  700, lp:  699, rp:  699 },
+  '\\=':  { prec:  700, lp:  699, rp:  699 },
+  '==':   { prec:  700, lp:  699, rp:  699 },
+  '\\==': { prec:  700, lp:  699, rp:  699 },
+  '<':    { prec:  700, lp:  699, rp:  699 },
+  '>':    { prec:  700, lp:  699, rp:  699 },
+  '=<':   { prec:  700, lp:  699, rp:  699 },
+  '>=':   { prec:  700, lp:  699, rp:  699 },
+  '=:=':  { prec:  700, lp:  699, rp:  699 },
+  '=\\=': { prec:  700, lp:  699, rp:  699 },
+  '=..':  { prec:  700, lp:  699, rp:  699 },
+  '+':    { prec:  500, lp:  500, rp:  499 }, // yfx
+  '-':    { prec:  500, lp:  500, rp:  499 },
+  '*':    { prec:  400, lp:  400, rp:  399 },
+  '/':    { prec:  400, lp:  400, rp:  399 },
+  '//':   { prec:  400, lp:  400, rp:  399 },
+  'mod':  { prec:  400, lp:  400, rp:  399 },
+  '^':    { prec:  200, lp:  199, rp:  200 }, // xfy
+  '**':   { prec:  200, lp:  199, rp:  199 },
+};
+
+// Prefix operators
+const PRE_OPS = {
+  '\\+': 900, 'not': 900, '-': 200, '+': 200
+};
+
+function termPrec(term) {
+  if (term.t !== 'c') return 0;
+  const b = BIN_OPS[term.f];
+  if (b && term.a.length === 2) return b.prec;
+  if (PRE_OPS[term.f] !== undefined && term.a.length === 1) return PRE_OPS[term.f];
+  return 0;
+}
+
+function makeNameMap(clause) {
+  const vars = clauseVars(clause);
+  const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  const map = new Map();
+  vars.forEach((v, i) => {
+    const l = letters[i % 26];
+    const s = Math.floor(i / 26);
+    map.set(v.id, s === 0 ? l : l + s);
+  });
+  return map;
+}
+
+function atomNeedsQuote(n) {
+  if (n === '[]' || n === '{}' || n === '!' || n === '') return false;
+  if (/^[a-z][a-zA-Z0-9_]*$/.test(n)) return false;
+  if (/^[+\-*\/\\^<>=~:.?@#&;,|]+$/.test(n)) return false;
+  return true;
+}
+
+function termStr(term, nm, ctx) {
+  ctx = (ctx === undefined) ? 1200 : ctx;
+
+  if (term.t === 'a') {
+    const n = term.n;
+    return atomNeedsQuote(n) ? "'" + n.replace(/\\/g, '\\\\').replace(/'/g, "\\'") + "'" : n;
+  }
+  if (term.t === 'n') {
+    const s = (term.v < 0) ? `(${term.v})` : String(term.v);
+    return s;
+  }
+  if (term.t === 'v') {
+    return (nm && nm.has(term.id)) ? nm.get(term.id) : (term.n || '_');
+  }
+  if (term.t === 'c') {
+    const f = term.f, a = term.a;
+
+    // List notation
+    if (f === '.' && a.length === 2) {
+      const parts = [];
+      let cur = term;
+      while (cur.t === 'c' && cur.f === '.' && cur.a.length === 2) {
+        parts.push(termStr(cur.a[0], nm, 999));
+        cur = cur.a[1];
+      }
+      const tail = (cur.t === 'a' && cur.n === '[]') ? '' : '|' + termStr(cur, nm, 999);
+      return '[' + parts.join(', ') + tail + ']';
+    }
+
+    // Binary operator
+    const bop = BIN_OPS[f];
+    if (bop && a.length === 2) {
+      const ls = termStr(a[0], nm, bop.lp);
+      const rs = termStr(a[1], nm, bop.rp);
+      let s = (f === ',') ? `${ls},\n    ${rs}` : `${ls} ${f} ${rs}`;
+      if (bop.prec > ctx) s = `(${s})`;
+      return s;
+    }
+
+    // Prefix operator
+    const pp = PRE_OPS[f];
+    if (pp !== undefined && a.length === 1) {
+      const sep = (f === '-' || f === '+') ? '' : ' ';
+      const as = termStr(a[0], nm, pp - 1);
+      let s = `${f}${sep}${as}`;
+      if (pp > ctx) s = `(${s})`;
+      return s;
+    }
+
+    // Regular compound
+    const argsStr = a.map(x => termStr(x, nm, 999)).join(', ');
+    return `${f}(${argsStr})`;
+  }
+  return '?';
+}
+
+function clauseStr(clause) {
+  const nm = makeNameMap(clause);
+  const h = termStr(clause.head, nm, 999);
+  if (clause.body.length === 0) return h + '.';
+  const body = clause.body.map(g => termStr(g, nm, 999)).join(',\n    ');
+  return `${h} :-\n    ${body}.`;
+}
+
+function programStr(ir) {
+  return ir.map(clauseStr).join('\n\n');
+}
+
+// ============================================================
+// 4. TOKENIZER
+// ============================================================
+
+const TT = {
+  ATOM:'atom', VAR:'var', NUM:'num',
+  LPAREN:'(', RPAREN:')', LBRACK:'[', RBRACK:']',
+  LBRACE:'{', RBRACE:'}',
+  COMMA:',', DOT:'.', PIPE:'|', EOF:'eof'
+};
+
+function tokenize(src) {
+  const toks = [];
+  let i = 0;
+  while (i < src.length) {
+    const ch = src[i];
+
+    // Whitespace
+    if (/\s/.test(ch)) { i++; continue; }
+
+    // Line comment
+    if (ch === '%') { while (i < src.length && src[i] !== '\n') i++; continue; }
+
+    // Block comment
+    if (ch === '/' && src[i+1] === '*') {
+      i += 2;
+      while (i < src.length && !(src[i] === '*' && src[i+1] === '/')) i++;
+      i += 2; continue;
+    }
+
+    // Number
+    if (/[0-9]/.test(ch)) {
+      let s = '';
+      while (i < src.length && /[0-9]/.test(src[i])) s += src[i++];
+      if (i < src.length && src[i] === '.' && i+1 < src.length && /[0-9]/.test(src[i+1])) {
+        s += src[i++];
+        while (i < src.length && /[0-9]/.test(src[i])) s += src[i++];
+      }
+      toks.push({ type: TT.NUM, value: parseFloat(s) }); continue;
+    }
+
+    // Variable
+    if (/[A-Z_]/.test(ch)) {
+      let s = '';
+      while (i < src.length && /[a-zA-Z0-9_]/.test(src[i])) s += src[i++];
+      toks.push({ type: TT.VAR, name: s }); continue;
+    }
+
+    // Quoted atom
+    if (ch === "'") {
+      i++;
+      let s = '';
+      while (i < src.length && src[i] !== "'") {
+        if (src[i] === '\\' && i+1 < src.length) { i++; }
+        s += src[i++];
+      }
+      if (i < src.length) i++;
+      toks.push({ type: TT.ATOM, name: s }); continue;
+    }
+
+    // Unquoted lowercase atom
+    if (/[a-z]/.test(ch)) {
+      let s = '';
+      while (i < src.length && /[a-zA-Z0-9_]/.test(src[i])) s += src[i++];
+      toks.push({ type: TT.ATOM, name: s }); continue;
+    }
+
+    // Multi-char symbolic operators (longest match first)
+    const syms = ['=:=','=\\=','=..','\\==','\\+','\\=','\\/','/\\','>=','=<','//','=>',':-','->','**','?-','-->'];
+    let matched = false;
+    for (const sym of syms) {
+      if (src.startsWith(sym, i)) {
+        toks.push({ type: TT.ATOM, name: sym }); i += sym.length; matched = true; break;
+      }
+    }
+    if (matched) continue;
+
+    // Single-char
+    i++;
+    switch (ch) {
+      case '(': toks.push({ type: TT.LPAREN }); break;
+      case ')': toks.push({ type: TT.RPAREN }); break;
+      case '[': toks.push({ type: TT.LBRACK }); break;
+      case ']': toks.push({ type: TT.RBRACK }); break;
+      case '{': toks.push({ type: TT.LBRACE }); break;
+      case '}': toks.push({ type: TT.RBRACE }); break;
+      case ',': toks.push({ type: TT.COMMA }); break;
+      case '|': toks.push({ type: TT.PIPE  }); break;
+      case '!': toks.push({ type: TT.ATOM, name: '!' }); break;
+      case ';': toks.push({ type: TT.ATOM, name: ';' }); break;
+      case '.':
+        // Clause terminator if followed by whitespace / EOF
+        if (i >= src.length || /\s/.test(src[i]))
+          toks.push({ type: TT.DOT });
+        else
+          toks.push({ type: TT.ATOM, name: '.' });
+        break;
+      case '+': toks.push({ type: TT.ATOM, name: '+' }); break;
+      case '-': toks.push({ type: TT.ATOM, name: '-' }); break;
+      case '*': toks.push({ type: TT.ATOM, name: '*' }); break;
+      case '/': toks.push({ type: TT.ATOM, name: '/' }); break;
+      case '^': toks.push({ type: TT.ATOM, name: '^' }); break;
+      case '<': toks.push({ type: TT.ATOM, name: '<' }); break;
+      case '>': toks.push({ type: TT.ATOM, name: '>' }); break;
+      case '=': toks.push({ type: TT.ATOM, name: '=' }); break;
+      case '\\':toks.push({ type: TT.ATOM, name: '\\'}); break;
+      default: /* skip */ break;
+    }
+  }
+  toks.push({ type: TT.EOF });
+  return toks;
+}
+
+// ============================================================
+// 5. PARSER (Pratt / operator-precedence)
+// ============================================================
+
+// Operator precedence table for infix/binary use
+const INFIX = {
+  ':-':   { prec: 1200, lp: 1199, rp: 1199 },
+  ';':    { prec: 1100, lp: 1099, rp: 1100 },
+  '->':   { prec: 1050, lp: 1049, rp: 1050 },
+  'is':   { prec:  700, lp:  699, rp:  699 },
+  '=':    { prec:  700, lp:  699, rp:  699 },
+  '\\=':  { prec:  700, lp:  699, rp:  699 },
+  '==':   { prec:  700, lp:  699, rp:  699 },
+  '\\==': { prec:  700, lp:  699, rp:  699 },
+  '<':    { prec:  700, lp:  699, rp:  699 },
+  '>':    { prec:  700, lp:  699, rp:  699 },
+  '=<':   { prec:  700, lp:  699, rp:  699 },
+  '>=':   { prec:  700, lp:  699, rp:  699 },
+  '=:=':  { prec:  700, lp:  699, rp:  699 },
+  '=\\=': { prec:  700, lp:  699, rp:  699 },
+  '=..':  { prec:  700, lp:  699, rp:  699 },
+  '+':    { prec:  500, lp:  500, rp:  499 },
+  '-':    { prec:  500, lp:  500, rp:  499 },
+  '*':    { prec:  400, lp:  400, rp:  399 },
+  '/':    { prec:  400, lp:  400, rp:  399 },
+  '//':   { prec:  400, lp:  400, rp:  399 },
+  'mod':  { prec:  400, lp:  400, rp:  399 },
+  'rem':  { prec:  400, lp:  400, rp:  399 },
+  '^':    { prec:  200, lp:  199, rp:  200 },
+  '**':   { prec:  200, lp:  199, rp:  199 },
+};
+
+// Prefix operator precedences (fy = can equal, fx = strict less)
+const PREFIX = {
+  '\\+': { prec: 900, argPrec: 900 },   // fy
+  'not': { prec: 900, argPrec: 900 },
+  '-':   { prec: 200, argPrec: 200 },
+  '+':   { prec: 200, argPrec: 200 },
+  '\\':  { prec: 200, argPrec: 199 },
+  ':-':  { prec: 1200, argPrec: 1199 },
+  '?-':  { prec: 1200, argPrec: 1199 },
+};
+
+class Parser {
+  constructor(tokens) {
+    this.toks = tokens;
+    this.pos = 0;
+    this.scope = new Map(); // name -> var (per clause)
+  }
+  peek()    { return this.toks[this.pos] || { type: TT.EOF }; }
+  advance() { return this.toks[this.pos++] || { type: TT.EOF }; }
+  expect(type) {
+    const t = this.advance();
+    if (t.type !== type) throw new Error(`Expected ${type}, got ${t.type} at token ${this.pos}`);
+    return t;
+  }
+  newScope() { this.scope = new Map(); }
+  getVar(name) {
+    if (name === '_') return mkVar('_');
+    if (!this.scope.has(name)) this.scope.set(name, mkVar(name));
+    return this.scope.get(name);
+  }
+
+  parseProgram() {
+    const clauses = [];
+    let id = 1;
+    while (this.peek().type !== TT.EOF) {
+      this.newScope();
+      try {
+        clauses.push(this.parseClause(id++));
+      } catch (e) {
+        // Skip to next dot
+        while (this.peek().type !== TT.DOT && this.peek().type !== TT.EOF) this.advance();
+        if (this.peek().type === TT.DOT) this.advance();
+      }
+    }
+    return clauses;
+  }
+
+  parseClause(id) {
+    const term = this.parseTerm(1200);
+    this.expect(TT.DOT);
+    if (term.t === 'c' && term.f === ':-' && term.a.length === 2) {
+      return { id: 'c' + id, head: term.a[0], body: this.bodyGoals(term.a[1]), meta: {} };
+    }
+    if (term.t === 'c' && term.f === '?-' && term.a.length === 1) return null; // directive, skip
+    return { id: 'c' + id, head: term, body: [], meta: {} };
+  }
+
+  bodyGoals(t) {
+    if (t.t === 'a' && t.n === 'true') return [];
+    if (t.t === 'c' && t.f === ',' && t.a.length === 2)
+      return [...this.bodyGoals(t.a[0]), ...this.bodyGoals(t.a[1])];
+    return [t];
+  }
+
+  parseTerm(maxPrec) {
+    let left = this.parsePrimary();
+
+    while (true) {
+      const tok = this.peek();
+      let opName = null;
+      if (tok.type === TT.ATOM && INFIX[tok.name]) opName = tok.name;
+      else if (tok.type === TT.COMMA && maxPrec >= 1000) opName = ',';
+      if (!opName) break;
+      const op = opName === ',' ? { prec: 1000, lp: 999, rp: 1000 } : INFIX[opName];
+      if (op.prec > maxPrec) break;
+      this.advance();
+      const right = this.parseTerm(op.rp);
+      left = mkComp(opName, [left, right]);
+    }
+    return left;
+  }
+
+  parsePrimary() {
+    const tok = this.peek();
+
+    if (tok.type === TT.NUM) { this.advance(); return mkNum(tok.value); }
+
+    if (tok.type === TT.VAR) { this.advance(); return this.getVar(tok.name); }
+
+    if (tok.type === TT.LPAREN) {
+      this.advance();
+      const t = this.parseTerm(1200);
+      this.expect(TT.RPAREN);
+      return t;
+    }
+
+    if (tok.type === TT.LBRACK) { this.advance(); return this.parseList(); }
+
+    if (tok.type === TT.LBRACE) {
+      this.advance();
+      if (this.peek().type === TT.RBRACE) { this.advance(); return mkAtom('{}'); }
+      const t = this.parseTerm(1200);
+      this.expect(TT.RBRACE);
+      return mkComp('{}', [t]);
+    }
+
+    if (tok.type === TT.ATOM) {
+      this.advance();
+      const name = tok.name;
+
+      // Prefix operator?
+      const pp = PREFIX[name];
+      if (pp) {
+        const next = this.peek();
+        const canPrefix = next.type !== TT.DOT && next.type !== TT.EOF &&
+          next.type !== TT.RPAREN && next.type !== TT.RBRACK && next.type !== TT.RBRACE;
+        if (canPrefix && !(next.type === TT.COMMA)) {
+          const arg = this.parseTerm(pp.argPrec);
+          return mkComp(name, [arg]);
+        }
+      }
+
+      // Compound term?
+      if (this.peek().type === TT.LPAREN) {
+        this.advance();
+        const args = [];
+        if (this.peek().type !== TT.RPAREN) {
+          args.push(this.parseTerm(999));
+          while (this.peek().type === TT.COMMA) { this.advance(); args.push(this.parseTerm(999)); }
+        }
+        this.expect(TT.RPAREN);
+        return mkComp(name, args);
+      }
+
+      return mkAtom(name);
+    }
+
+    throw new Error(`Unexpected token: ${tok.type}${tok.name ? ' ' + tok.name : ''}`);
+  }
+
+  parseList() {
+    if (this.peek().type === TT.RBRACK) { this.advance(); return ATOM_NIL; }
+    const elems = [this.parseTerm(999)];
+    while (this.peek().type === TT.COMMA) { this.advance(); elems.push(this.parseTerm(999)); }
+    let tail = ATOM_NIL;
+    if (this.peek().type === TT.PIPE) { this.advance(); tail = this.parseTerm(999); }
+    this.expect(TT.RBRACK);
+    return mkListTerm(elems, tail);
+  }
+}
+
+function parseProgram(src) {
+  const toks = tokenize(src);
+  const p = new Parser(toks);
+  return p.parseProgram().filter(Boolean);
+}
+
+// ============================================================
+// 6. STAGE 1 – UNFOLDING
+// ============================================================
+
+const META_SET = new Set([
+  'call/1','call/2','call/3','call/4','once/1','ignore/1',
+  'findall/3','bagof/3','setof/3','maplist/2','maplist/3','maplist/4','forall/2'
+]);
+const IO_SET = new Set([
+  'write/1','writeln/1','print/1','format/2','format/3',
+  'read/1','read_term/2','read_term/3','open/3','close/1','close/2',
+  'nl/0','put_char/1','get_char/1','get_code/1','see/1','tell/1'
+]);
+
+function isSafeInline(goal) {
+  if (goal.t === 'a' && goal.n === '!') return false;
+  if (goal.t === 'c') {
+    const f = goal.f;
+    if (f === ',' || f === ';' || f === '->') return false;
+    const fa = `${f}/${goal.a.length}`;
+    if (META_SET.has(fa) || IO_SET.has(fa)) return false;
+  }
+  return true;
+}
+
+function callsPred(body, pred) {
+  return body.some(g => getGoalFunctor(g) === pred);
+}
+
+function isUnfoldable(ir, clause) {
+  const pred = getFunctor(clause.head);
+  if (!pred) return false;
+  const all = ir.filter(c => getFunctor(c.head) === pred);
+  if (all.length !== 1) return false;
+  if (callsPred(clause.body, pred)) return false;
+  return clause.body.every(isSafeInline);
+}
+
+function inlineGoal(goal, helperMap) {
+  const fa = getGoalFunctor(goal);
+  if (!fa || !helperMap.has(fa)) return null;
+  const fresh = freshenClause(helperMap.get(fa));
+  // Unify fresh.head against goal so that fresh variables get bound to
+  // the goal's variables (not the other way around).  This ensures that
+  // substituting into the fresh body replaces the helper's vars with the
+  // caller's vars.
+  const env = unify(fresh.head, goal, new Map());
+  if (!env) return null;
+  return fresh.body.map(g => subst(g, env));
+}
+
+function unfoldOnce(ir) {
+  const helperMap = new Map();
+  for (const c of ir) {
+    if (isUnfoldable(ir, c)) helperMap.set(getFunctor(c.head), c);
+  }
+  const newIr = [], report = [];
+  for (const clause of ir) {
+    const newBody = [];
+    let changed = false;
+    for (const goal of clause.body) {
+      const inlined = inlineGoal(goal, helperMap);
+      if (inlined !== null) { newBody.push(...inlined); changed = true; }
+      else newBody.push(goal);
+    }
+    if (changed) {
+      newIr.push({ ...clause, body: newBody });
+      report.push({ type: 'unfolded', pred: getFunctor(clause.head) });
+    } else {
+      newIr.push(clause);
+    }
+  }
+  return { ir: newIr, report };
+}
+
+function unfoldProgram(ir) {
+  let current = ir, allReport = [];
+  for (let i = 0; i < 100; i++) {  // max iterations guard
+    const { ir: next, report } = unfoldOnce(current);
+    allReport = allReport.concat(report);
+    if (irEqual(next, current)) break;
+    current = next;
+  }
+  return { ir: current, report: dedupeReport(allReport) };
+}
+
+// ============================================================
+// 7. STAGE 2 – MEMOISATION
+// ============================================================
+
+const ARITH_OPS = new Set(['is','>','<','>=','=<','=:=','=\\=','=','\\=','==','\\==']);
+
+function isSafeMemo(goal) {
+  if (goal.t === 'a') return goal.n !== '!';
+  if (goal.t === 'c') {
+    const f = goal.f;
+    if (f === ',' || f === ';' || f === '->') return false;
+    if (ARITH_OPS.has(f)) return false;
+    const fa = `${f}/${goal.a.length}`;
+    if (META_SET.has(fa) || IO_SET.has(fa)) return false;
+    return true;
+  }
+  return false;
+}
+
+function dedupeBody(body, knownIds) {
+  const seen = [], result = [];
+  let changed = false;
+  const known = new Set(knownIds);
+
+  for (const goal of body) {
+    if (isSafeMemo(goal) && goal.t === 'c') {
+      const bindings = findDup(goal, seen, known);
+      if (bindings !== null) {
+        // Apply bindings to remaining (we modify body in place via subst)
+        // Substitute all future goals
+        const substFn = g => subst(g, bindings);
+        for (let j = 0; j < result.length; j++) result[j] = substFn(result[j]);
+        for (let j = body.indexOf(goal) + 1; j < body.length; j++) body[j] = substFn(body[j]);
+        changed = true;
+        continue;
+      }
+    }
+    seen.push(goal);
+    for (const v of termVars(goal)) known.add(v.id);
+    result.push(goal);
+  }
+  return { body: result, changed };
+}
+
+function findDup(goal, seen, known) {
+  for (const prev of seen) {
+    if (prev.t !== 'c' || prev.f !== goal.f || prev.a.length !== goal.a.length) continue;
+    const bindings = new Map();
+    let ok = true;
+    for (let i = 0; i < goal.a.length; i++) {
+      const a = goal.a[i], b = prev.a[i];
+      if (termEq(a, b)) continue;
+      if (a.t === 'v' && !known.has(a.id)) { bindings.set(a.id, b); continue; }
+      ok = false; break;
+    }
+    if (ok) return bindings;
+  }
+  return null;
+}
+
+function memoiseProgram(ir) {
+  const result = [], report = [];
+  for (const clause of ir) {
+    const headIds = termVars(clause.head).map(v => v.id);
+    // Work on a mutable copy of body
+    const bodyCopy = [...clause.body];
+    const { body: newBody, changed } = dedupeBody(bodyCopy, headIds);
+    result.push(changed ? { ...clause, body: newBody } : clause);
+    if (changed) report.push({ type: 'memoised', pred: getFunctor(clause.head) });
+  }
+  return { ir: result, report: dedupeReport(report) };
+}
+
+// ============================================================
+// 8. STAGE 3 – FORMULA SIMPLIFICATION (sum_to_n pattern)
+// ============================================================
+
+function matchNum(term, v) { return term.t === 'n' && term.v === v; }
+function matchComp(term, f, arity) { return term.t === 'c' && term.f === f && term.a.length === arity; }
+
+function isSumBase(name, clause) {
+  if (clause.body.length !== 0) return false;
+  const h = clause.head;
+  if (!matchComp(h, name, 2)) return false;
+  return matchNum(h.a[0], 0) && matchNum(h.a[1], 0);
+}
+
+function isSumRecursive(name, clause) {
+  const h = clause.head;
+  if (!matchComp(h, name, 2)) return false;
+  const [N, S] = h.a;
+  if (N.t !== 'v' || S.t !== 'v') return false;
+  const b = clause.body;
+  if (b.length !== 4) return false;
+  // N > 0
+  if (!matchComp(b[0], '>', 2) || !termEq(b[0].a[0], N) || !matchNum(b[0].a[1], 0)) return false;
+  // N1 is N - 1
+  if (!matchComp(b[1], 'is', 2)) return false;
+  const N1 = b[1].a[0];
+  if (N1.t !== 'v') return false;
+  const expr1 = b[1].a[1];
+  if (!matchComp(expr1, '-', 2) || !termEq(expr1.a[0], N) || !matchNum(expr1.a[1], 1)) return false;
+  // name(N1, S1)
+  if (!matchComp(b[2], name, 2) || !termEq(b[2].a[0], N1)) return false;
+  const S1 = b[2].a[1];
+  if (S1.t !== 'v') return false;
+  // S is S1 + N
+  if (!matchComp(b[3], 'is', 2) || !termEq(b[3].a[0], S)) return false;
+  const expr2 = b[3].a[1];
+  if (!matchComp(expr2, '+', 2) || !termEq(expr2.a[0], S1) || !termEq(expr2.a[1], N)) return false;
+  return true;
+}
+
+function simplifyProgram(ir) {
+  // Collect distinct predicates of arity 2
+  const preds = [...new Set(
+    ir.filter(c => c.head.t === 'c' && c.head.a.length === 2).map(c => c.head.f)
+  )];
+  let current = ir;
+  const report = [];
+  for (const name of preds) {
+    const clauses = current.filter(c => c.head.t === 'c' && c.head.f === name && c.head.a.length === 2);
+    if (clauses.length !== 2) continue;
+    const hasBase = clauses.some(c => isSumBase(name, c));
+    const hasRec  = clauses.some(c => isSumRecursive(name, c));
+    if (!hasBase || !hasRec) continue;
+    // Verify formula numerically (0..12)
+    if (!verifySumFormula()) continue;
+    // Replace with closed-form clause
+    const N = mkVar('N'), S = mkVar('S');
+    const formula = mkComp('//', [mkComp('*', [N, mkComp('+', [N, mkNum(1)])]), mkNum(2)]);
+    const newClause = {
+      id: `c_formula_${name}_2`,
+      head: mkComp(name, [N, S]),
+      body: [mkComp('is', [S, formula])],
+      meta: {}
+    };
+    current = current.filter(c => !(c.head.t === 'c' && c.head.f === name && c.head.a.length === 2));
+    current = [newClause, ...current];
+    report.push({ type: 'formula_discovered', pred: `${name}/2`, formula: 'n_times_n_plus_1_over_2' });
+  }
+  return { ir: current, report };
+}
+
+function verifySumFormula() {
+  // Check sum(0..12) matches n*(n+1)//2
+  function rec(n) { if (n === 0) return 0; return rec(n-1) + n; }
+  for (let n = 0; n <= 12; n++) {
+    if (rec(n) !== Math.floor(n * (n + 1) / 2)) return false;
+  }
+  return true;
+}
+
+// ============================================================
+// 9. GAUSSIAN ELIMINATION
+// ============================================================
+
+function gaussianEliminate(matrix) {
+  if (!matrix || matrix.length === 0) return [];
+  const M = matrix.map(r => r.map(Number));
+  const rows = M.length, cols = M[0].length;
+  let pivotRow = 0;
+
+  for (let col = 0; col < cols - 1 && pivotRow < rows; col++) {
+    // Find pivot
+    let pi = -1;
+    for (let r = pivotRow; r < rows; r++) {
+      if (Math.abs(M[r][col]) > 1e-12) { pi = r; break; }
+    }
+    if (pi === -1) continue;
+
+    // Swap
+    [M[pivotRow], M[pi]] = [M[pi], M[pivotRow]];
+
+    // Normalize pivot row
+    const pv = M[pivotRow][col];
+    for (let c = 0; c < cols; c++) M[pivotRow][c] /= pv;
+
+    // Eliminate all other rows
+    for (let r = 0; r < rows; r++) {
+      if (r === pivotRow) continue;
+      const factor = M[r][col];
+      if (Math.abs(factor) < 1e-12) continue;
+      for (let c = 0; c < cols; c++) {
+        M[r][c] -= factor * M[pivotRow][c];
+        if (Math.abs(M[r][c]) < 1e-10) M[r][c] = 0;
+      }
+    }
+    pivotRow++;
+  }
+  return M;
+}
+
+function fitPolynomial(samples, degree) {
+  if (!Number.isInteger(degree) || degree < 0) return null;
+  const needed = degree + 1;
+  if (samples.length < needed) return null;
+  // Build Vandermonde matrix (augmented)
+  const matrix = [];
+  for (let i = 0; i < needed; i++) {
+    const n = i + 1;
+    const row = [];
+    for (let d = 0; d <= degree; d++) row.push(Math.pow(n, d));
+    row.push(samples[i]);
+    matrix.push(row);
+  }
+  const reduced = gaussianEliminate(matrix);
+  const coeffs = reduced.map(row => row[row.length - 1]);
+  // Verify against all samples
+  for (let i = 0; i < samples.length; i++) {
+    const actual = polynomialValue(coeffs, i + 1);
+    if (Math.abs(actual - samples[i]) > 1e-5) return null;
+  }
+  return coeffs;
+}
+
+function polynomialValue(coeffs, n) {
+  return coeffs.reduce((s, c, d) => s + c * Math.pow(n, d), 0);
+}
+
+// ============================================================
+// 10. FORMULA DISCOVERY
+// ============================================================
+
+function inferSequenceFormula(samples) {
+  if (!samples || samples.length === 0) return null;
+  const maxDeg = samples.length - 1;
+  for (let deg = 0; deg <= maxDeg; deg++) {
+    const coeffs = fitPolynomial(samples, deg);
+    if (coeffs !== null) return { coeffs, formula: formulaString(coeffs) };
+  }
+  return null;
+}
+
+function roundCoeff(c) {
+  if (Math.abs(c) < 1e-9) return 0;
+  const r = Math.round(c);
+  if (Math.abs(c - r) < 1e-7) return r;
+  // Check halves
+  const h = Math.round(c * 2) / 2;
+  if (Math.abs(c - h) < 1e-7) return h;
+  return +c.toFixed(6);
+}
+
+function formulaString(coeffs) {
+  const rc = coeffs.map(roundCoeff);
+  const eps = 1e-9;
+  // Special forms
+  if (rc.length === 1) return rc[0] === 0 ? '0' : String(rc[0]);
+  if (rc.length === 2 && Math.abs(rc[0]) < eps && Math.abs(rc[1] - 1) < eps) return 'n';
+  if (rc.length === 2 && Math.abs(rc[0] + 1) < eps && Math.abs(rc[1] - 2) < eps) return '2*n - 1';
+  if (rc.length === 3 && Math.abs(rc[0]) < eps && Math.abs(rc[1] - 0.5) < eps && Math.abs(rc[2] - 0.5) < eps)
+    return 'n*(n+1)/2';
+  if (rc.length === 4 && Math.abs(rc[0]) < eps && Math.abs(rc[1]) < eps
+      && Math.abs(rc[2] - 0.5) < eps && Math.abs(rc[3] - 0.5) < eps)
+    return 'n*(n+1)*(2*n+1)/6';   // recognise if it fits
+
+  // Generic
+  const terms = [];
+  for (let d = rc.length - 1; d >= 0; d--) {
+    const c = rc[d];
+    if (Math.abs(c) < eps) continue;
+    let t;
+    if (d === 0) t = String(c);
+    else if (d === 1) t = (Math.abs(c - 1) < eps) ? 'n' : (Math.abs(c + 1) < eps ? '-n' : `${c}*n`);
+    else t = (Math.abs(c - 1) < eps) ? `n^${d}` : (Math.abs(c + 1) < eps ? `-n^${d}` : `${c}*n^${d}`);
+    terms.push(t);
+  }
+  if (terms.length === 0) return '0';
+  return terms.join(' + ').replace(/\+ -/g, '- ');
+}
+
+function verifyFormula(formulaStr, refFn, start, end) {
+  const fn = compileFormula(formulaStr);
+  if (!fn) return { ok: false, error: 'Could not compile formula' };
+  const failures = [];
+  for (let n = start; n <= end; n++) {
+    const expected = refFn(n);
+    const actual   = fn(n);
+    if (Math.abs(actual - expected) > 1e-5) {
+      failures.push({ n, expected, actual });
+      if (failures.length >= 5) break;
+    }
+  }
+  return failures.length === 0
+    ? { ok: true }
+    : { ok: false, failures };
+}
+
+function compileFormula(s) {
+  try {
+    // Replace ^ with ** for JS, n*(n+1)/2 etc. are already valid JS
+    const js = s.replace(/\^/g, '**');
+    // eslint-disable-next-line no-new-func
+    const fn = new Function('n', `return ${js};`);
+    fn(1); // test call
+    return fn;
+  } catch (e) { return null; }
+}
+
+// ============================================================
+// 11. SAFETY CLASSIFICATION
+// ============================================================
+
+const SIDE_FX = new Set([
+  'write/1','write/2','writeln/1','writeln/2','print/1','print/2',
+  'write_canonical/1','write_term/2','write_term/3',
+  'format/1','format/2','format/3',
+  'read/1','read_term/2','read_term/3',
+  'open/3','open/4','close/1','close/2',
+  'nl/0','nl/1','put_char/1','put_char/2','get_char/1','get_char/2',
+  'get_code/1','get_code/2','peek_char/1','peek_code/1',
+  'see/1','tell/1','seen/0','told/0',
+  'assert/1','asserta/1','assertz/1','retract/1','retractall/1','abolish/1',
+  'nb_setval/2','nb_getval/2','b_setval/2','b_getval/2','set_flag/2','flag/3',
+  'findall/3','bagof/3','setof/3',
+  'call/1','call/2','call/3','call/4',
+  'once/1','ignore/1','forall/2',
+  'maplist/2','maplist/3','maplist/4','aggregate_all/3'
+]);
+
+const SAFE_PREDS = new Set([
+  'is/2','>/2','</2','>=/2','=</2','=:=/2','=\\=/2',
+  '=/2','\\=/2','==/2','\\==/2',
+  'functor/3','arg/3','=../2','copy_term/2',
+  'atom/1','number/1','integer/1','float/1','compound/1',
+  'callable/1','var/1','nonvar/1','is_list/1','string/1','atomic/1',
+  'true/0','fail/0','false/0',
+  'length/2','append/3','member/2','memberchk/2',
+  'nth0/3','nth1/3','last/2','msort/2','sort/2','sort/4',
+  'reverse/2','flatten/2','between/3','succ/2','plus/3',
+  'subterm_with_address/3','max_list/2','min_list/2','sum_list/2','numlist/3',
+  'number_codes/2','number_chars/2','atom_codes/2','atom_chars/2',
+  'atom_length/2','atom_concat/3','char_code/2','sub_atom/5',
+  'atom_string/2','string_codes/2','string_concat/3','string_length/2',
+  'upcase_atom/2','downcase_atom/2'
+]);
+
+function hasCut(term) {
+  if (term.t === 'a' && term.n === '!') return true;
+  if (term.t === 'c') return term.a.some(hasCut);
+  return false;
+}
+
+function hasSideEffects(goal) {
+  if (goal.t === 'c') return SIDE_FX.has(`${goal.f}/${goal.a.length}`);
+  if (goal.t === 'a') return SIDE_FX.has(`${goal.n}/0`);
+  return false;
+}
+
+function classifyGoalSafety(goal) {
+  if (hasCut(goal)) return 'unsafe';
+  if (hasSideEffects(goal)) return 'unsafe';
+  if (goal.t === 'c' && SAFE_PREDS.has(`${goal.f}/${goal.a.length}`)) return 'safe';
+  if (goal.t === 'a') {
+    const fa = `${goal.n}/0`;
+    if (goal.n === 'true' || goal.n === 'fail' || goal.n === 'false') return 'safe';
+    if (SAFE_PREDS.has(fa)) return 'safe';
+  }
+  return 'unknown';
+}
+
+function worstSafety(a, b) {
+  if (a === 'unsafe' || b === 'unsafe') return 'unsafe';
+  if (a === 'unknown' || b === 'unknown') return 'unknown';
+  return 'safe';
+}
+
+function classifyBodySafety(body) {
+  return body.reduce((s, g) => worstSafety(s, classifyGoalSafety(g)), 'safe');
+}
+
+// ============================================================
+// 12. REPORTER
+// ============================================================
+
+function reportLine(item) {
+  switch (item.type) {
+    case 'unfolded':          return `unfolded: ${item.pred}`;
+    case 'memoised':          return `memoised: ${item.pred}`;
+    case 'formula_discovered': return `formula_discovered: ${item.pred} => ${item.formula}`;
+    case 'indexical_mapping': return `indexical_mapping: ${item.pred} => ${item.mapping}`;
+    case 'loop_converted':    return `loop_converted: ${item.pred}`;
+    case 'skipped':           return `skipped: ${item.pred} (${item.reason})`;
+    default:                  return JSON.stringify(item);
+  }
+}
+
+function reportLines(items) { return items.map(reportLine); }
+function reportText(items)  { return reportLines(items).join('\n'); }
+
+function renderReport(items, el) {
+  if (!items || items.length === 0) {
+    el.innerHTML = '<span class="r-unknown">No optimisations applied.</span>';
+    return;
+  }
+  el.innerHTML = items.map(item => {
+    const line = reportLine(item);
+    const cls = {
+      unfolded: 'r-unfolded',
+      memoised: 'r-memoised',
+      formula_discovered: 'r-formula',
+      skipped: 'r-skipped'
+    }[item.type] || 'r-unknown';
+    return `<span class="${cls}">${escHtml(line)}</span>`;
+  }).join('\n');
+}
+
+// ============================================================
+// 13. OPTIMISER PIPELINE
+// ============================================================
+
+function optimiseProgram(src) {
+  let ir;
+  try { ir = parseProgram(src); } catch (e) { return { error: 'Parse error: ' + e.message }; }
+  if (!ir || ir.length === 0) return { error: 'No clauses found.' };
+
+  const report = [];
+
+  const { ir: ir1, report: r1 } = unfoldProgram(ir);
+  report.push(...r1);
+
+  const { ir: ir2, report: r2 } = memoiseProgram(ir1);
+  report.push(...r2);
+
+  const { ir: ir3, report: r3 } = simplifyProgram(ir2);
+  report.push(...r3);
+
+  return { ir: ir3, report };
+}
+
+// ============================================================
+// HELPERS
+// ============================================================
+
+function dedupeReport(items) {
+  const seen = new Set();
+  return items.filter(i => {
+    const k = JSON.stringify(i);
+    if (seen.has(k)) return false;
+    seen.add(k); return true;
+  });
+}
+
+function escHtml(s) {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function parseMatrix(src) {
+  return src.trim().split('\n').filter(l => l.trim()).map(line =>
+    line.trim().split(/[\s,]+/).map(Number)
+  );
+}
+
+function fmtNum(n) {
+  if (n === 0) return '0';
+  if (Number.isInteger(n)) return String(n);
+  const h = Math.round(n * 2) / 2;
+  return Math.abs(n - h) < 1e-9 ? String(+n.toFixed(4)) : String(+n.toFixed(6));
+}
+
+// ============================================================
+// EXAMPLE PROGRAMS
+// ============================================================
+
+const EXAMPLES = {
+  stage1: `% Stage 1 – Unfolding (inline single-clause helpers)
+inc(X, Y) :-
+    Y is X + 1.
+
+double(X, Y) :-
+    Y is X * 2.
+
+combined(X, Y) :-
+    inc(X, A),
+    double(A, Y).`,
+
+  stage2: `% Stage 2 – Memoisation (remove duplicate calls)
+% expensive/2 has two clauses, so it cannot be inlined.
+expensive(0, 0).
+expensive(X, Y) :-
+    X > 0,
+    Y is X * X.
+
+p(X, Y, Z) :-
+    expensive(X, A),
+    expensive(X, B),
+    Y is A + 1,
+    Z is B + 2.`,
+
+  stage3: `% Stage 3 – Formula simplification (sum_to_n → closed form)
+sum_to_n(0, 0).
+sum_to_n(N, S) :-
+    N > 0,
+    N1 is N - 1,
+    sum_to_n(N1, S1),
+    S is S1 + N.`,
+
+  combined: `% Combined: unfolding + memoisation + formula discovery
+inc(X, Y) :- Y is X + 1.
+double(X, Y) :- Y is X * 2.
+
+sum_to_n(0, 0).
+sum_to_n(N, S) :-
+    N > 0,
+    N1 is N - 1,
+    sum_to_n(N1, S1),
+    S is S1 + N.
+
+% Memoisation target: fetch/2 is called twice with same X
+fetch(0, base).
+fetch(X, val(X)) :- X > 0.
+
+use_fetch(X, A, B) :-
+    fetch(X, A),
+    fetch(X, B).`
+};
+
+const GAUSS_EXAMPLES = {
+  poly2: `1 1 1 6\n1 2 4 14\n1 3 9 30`,
+  linear: `1 1 3\n1 2 5\n1 3 7`
+};
+
+// ============================================================
+// UI HANDLERS
+// ============================================================
+
+function showTab(id, btn) {
+  document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(el => el.classList.remove('active'));
+  document.getElementById('tab-' + id).classList.add('active');
+  btn.classList.add('active');
+}
+
+function loadExample(name) {
+  document.getElementById('opt-input').value = EXAMPLES[name] || '';
+}
+
+function loadGaussExample(name) {
+  document.getElementById('gauss-input').value = GAUSS_EXAMPLES[name] || '';
+}
+
+function clearOpt() {
+  document.getElementById('opt-input').value = '';
+  document.getElementById('opt-output').textContent = 'Output will appear here…';
+  document.getElementById('opt-output').className = 'empty-state';
+  document.getElementById('opt-report').innerHTML = '<span class="empty-state">No report yet.</span>';
+}
+
+function runOptimiser() {
+  const src = document.getElementById('opt-input').value;
+  const outEl = document.getElementById('opt-output');
+  const repEl = document.getElementById('opt-report');
+
+  if (!src.trim()) { outEl.textContent = 'Please enter a Prolog program.'; outEl.className = ''; return; }
+
+  const result = optimiseProgram(src);
+  if (result.error) {
+    outEl.textContent = result.error;
+    outEl.className = '';
+    repEl.innerHTML = '';
+    return;
+  }
+  outEl.className = '';
+  outEl.textContent = programStr(result.ir);
+  renderReport(result.report, repEl);
+}
+
+function runGauss() {
+  const src = document.getElementById('gauss-input').value;
+  const outEl = document.getElementById('gauss-output');
+  if (!src.trim()) { outEl.innerHTML = '<p class="empty-state">Enter a matrix first.</p>'; return; }
+
+  let matrix;
+  try { matrix = parseMatrix(src); } catch (e) { outEl.innerHTML = '<p style="color:#f08080">Parse error.</p>'; return; }
+  if (matrix.length === 0) { outEl.innerHTML = '<p class="empty-state">No rows found.</p>'; return; }
+
+  const reduced = gaussianEliminate(matrix);
+
+  // Build HTML table
+  const colCount = reduced[0] ? reduced[0].length : 0;
+  const headers = Array.from({ length: colCount - 1 }, (_, i) => `x<sub>${i+1}</sub>`).concat(['RHS']);
+  let html = '<table><thead><tr>' + headers.map(h => `<th>${h}</th>`).join('') + '</tr></thead><tbody>';
+  for (const row of reduced) {
+    html += '<tr>' + row.map(v => `<td>${fmtNum(v)}</td>`).join('') + '</tr>';
+  }
+  html += '</tbody></table>';
+
+  // Extract solution
+  const vars = colCount - 1;
+  if (reduced.length >= vars) {
+    html += '<p style="margin-top:12px;color:#8ab4f8;font-size:0.85rem;font-weight:600">Solution:</p>';
+    for (let i = 0; i < vars && i < reduced.length; i++) {
+      const rhs = reduced[i][colCount - 1];
+      html += `<div style="font-family:monospace;font-size:0.85rem;color:#c8deff;margin:2px 0">x<sub>${i+1}</sub> = ${fmtNum(rhs)}</div>`;
+    }
+  }
+  outEl.innerHTML = html;
+}
+
+function runPolyFit() {
+  const raw = document.getElementById('poly-samples').value;
+  const outEl = document.getElementById('poly-output');
+  const samples = raw.split(',').map(s => parseFloat(s.trim())).filter(n => !isNaN(n));
+  if (samples.length === 0) { outEl.innerHTML = '<p class="empty-state">Enter sample values.</p>'; return; }
+
+  let html = '';
+  const maxDeg = samples.length - 1;
+  let found = false;
+  for (let deg = 0; deg <= maxDeg; deg++) {
+    const coeffs = fitPolynomial(samples, deg);
+    if (coeffs !== null) {
+      const fs = formulaString(coeffs);
+      html += `<div style="color:#e3b341;font-family:monospace;font-size:1rem;margin-bottom:8px">f(n) = ${escHtml(fs)}</div>`;
+      html += `<div style="color:#7a8aaa;font-size:0.82rem">Degree: ${deg}</div>`;
+      html += `<div style="color:#7a8aaa;font-size:0.82rem">Coefficients [c₀,c₁,...]: [${coeffs.map(c => fmtNum(c)).join(', ')}]</div>`;
+      found = true;
+      break;
+    }
+  }
+  if (!found) html = '<p style="color:#f08080">No polynomial fit found for these samples.</p>';
+  outEl.innerHTML = html;
+}
+
+function runFormulaDiscovery() {
+  const raw = document.getElementById('seq-input').value;
+  const outEl = document.getElementById('formula-output');
+  const samples = raw.split(',').map(s => parseFloat(s.trim())).filter(n => !isNaN(n));
+  if (samples.length === 0) { outEl.innerHTML = '<p class="empty-state">Enter sequence values.</p>'; return; }
+
+  const result = inferSequenceFormula(samples);
+  if (!result) {
+    outEl.innerHTML = '<p style="color:#f08080">No polynomial formula found for this sequence.</p>';
+    return;
+  }
+  // Verify
+  const fn = compileFormula(result.formula);
+  const table = samples.map((s, i) => {
+    const n = i + 1;
+    const computed = fn ? fn(n) : '?';
+    const ok = fn && Math.abs(computed - s) < 1e-5;
+    return `<tr><td>${n}</td><td>${s}</td><td>${fn ? fmtNum(computed) : '?'}</td><td style="color:${ok?'#3ddc84':'#f08080'}">${ok?'✓':'✗'}</td></tr>`;
+  }).join('');
+  outEl.innerHTML = `
+    <div style="color:#e3b341;font-family:monospace;font-size:1.1rem;margin-bottom:12px">f(n) = ${escHtml(result.formula)}</div>
+    <div style="color:#7a8aaa;font-size:0.82rem;margin-bottom:10px">Degree: ${result.coeffs.length - 1} | Coefficients: [${result.coeffs.map(c=>fmtNum(c)).join(', ')}]</div>
+    <table>
+      <thead><tr><th>n</th><th>Sample</th><th>f(n)</th><th>✓</th></tr></thead>
+      <tbody>${table}</tbody>
+    </table>`;
+}
+
+function runVerify() {
+  const formulaStr = document.getElementById('verify-formula').value.trim();
+  const fnStr      = document.getElementById('verify-fn').value.trim();
+  const start      = parseInt(document.getElementById('verify-start').value) || 1;
+  const end        = parseInt(document.getElementById('verify-end').value)   || 20;
+  const outEl      = document.getElementById('verify-output');
+
+  if (!formulaStr) { outEl.innerHTML = '<p class="empty-state">Enter a formula.</p>'; return; }
+  const refStr = fnStr || formulaStr;
+
+  let refFn;
+  try {
+    const js = refStr.replace(/\^/g, '**');
+    // eslint-disable-next-line no-new-func
+    refFn = new Function('n', `return ${js};`);
+    refFn(1);
+  } catch (e) {
+    outEl.innerHTML = `<p style="color:#f08080">Could not compile reference function: ${escHtml(e.message)}</p>`;
+    return;
+  }
+
+  const res = verifyFormula(formulaStr, refFn, start, end);
+  if (res.ok) {
+    outEl.innerHTML = `<div style="color:#3ddc84;font-size:1rem">✓ Formula <code>${escHtml(formulaStr)}</code> verified for n=${start}..${end}.</div>`;
+  } else if (res.error) {
+    outEl.innerHTML = `<p style="color:#f08080">${escHtml(res.error)}</p>`;
+  } else {
+    const rows = res.failures.map(f =>
+      `<tr><td>${f.n}</td><td>${fmtNum(f.expected)}</td><td>${fmtNum(f.actual)}</td></tr>`
+    ).join('');
+    outEl.innerHTML = `
+      <div style="color:#f08080;margin-bottom:8px">✗ Verification failed:</div>
+      <table><thead><tr><th>n</th><th>Expected</th><th>Formula</th></tr></thead>
+      <tbody>${rows}</tbody></table>`;
+  }
+}
+
+function loadSafetyExample() {
+  document.getElementById('safety-input').value =
+`sum_to_n(0, 0).
+sum_to_n(N, S) :-
+    N > 0,
+    N1 is N - 1,
+    sum_to_n(N1, S1),
+    S is S1 + N.
+
+io_pred(X) :-
+    writeln(X),
+    X > 0.
+
+meta_pred(L, R) :-
+    findall(Y, member(Y, L), R).`;
+}
+
+function runSafety() {
+  const src = document.getElementById('safety-input').value;
+  const outEl = document.getElementById('safety-output');
+  if (!src.trim()) { outEl.innerHTML = '<p class="empty-state">Enter a program first.</p>'; return; }
+
+  let ir;
+  try { ir = parseProgram(src); } catch (e) {
+    outEl.innerHTML = `<p style="color:#f08080">Parse error: ${escHtml(e.message)}</p>`;
+    return;
+  }
+
+  if (!ir || ir.length === 0) {
+    outEl.innerHTML = '<p class="empty-state">No clauses found.</p>';
+    return;
+  }
+
+  let html = '';
+  for (const clause of ir) {
+    const nm = makeNameMap(clause);
+    const headStr = termStr(clause.head, nm, 999);
+    const bodySafety = classifyBodySafety(clause.body);
+    const badge = `<span class="badge badge-${bodySafety}">${bodySafety}</span>`;
+    html += `<div style="margin-bottom:16px;border:1px solid #1e2a40;border-radius:6px;padding:12px">`;
+    html += `<div style="font-family:monospace;font-size:0.9rem;color:#8ab4f8;margin-bottom:8px">${escHtml(headStr)} ${badge}</div>`;
+    if (clause.body.length > 0) {
+      for (const goal of clause.body) {
+        const gs = classifyGoalSafety(goal);
+        const gs_str = termStr(goal, nm, 999);
+        html += `<div class="safety-row"><span style="flex:1">${escHtml(gs_str)}</span><span class="badge badge-${gs}">${gs}</span></div>`;
+      }
+    } else {
+      html += `<div style="color:#4a6080;font-size:0.82rem;font-style:italic">Fact (no body goals).</div>`;
+    }
+    html += `</div>`;
+  }
+  outEl.innerHTML = html;
+}
+
+function loadReporterExample() {
+  document.getElementById('reporter-input').value = JSON.stringify([
+    { type: 'unfolded', pred: 'combined/2' },
+    { type: 'memoised', pred: 'p/3' },
+    { type: 'formula_discovered', pred: 'sum_to_n/2', formula: 'n_times_n_plus_1_over_2' },
+    { type: 'loop_converted', pred: 'process_list/2' },
+    { type: 'skipped', pred: 'io_pred/1', reason: 'unsafe' }
+  ], null, 2);
+}
+
+function runReporter() {
+  const src = document.getElementById('reporter-input').value;
+  const outEl = document.getElementById('reporter-output');
+  let items;
+  try { items = JSON.parse(src); } catch (e) {
+    outEl.innerHTML = `<p style="color:#f08080">JSON parse error: ${escHtml(e.message)}</p>`;
+    return;
+  }
+  if (!Array.isArray(items)) {
+    outEl.innerHTML = '<p style="color:#f08080">Expected a JSON array of report items.</p>';
+    return;
+  }
+  const lines = reportLines(items);
+  const htmlLines = lines.map((l, i) => {
+    const t = items[i].type;
+    const cls = { unfolded:'r-unfolded', memoised:'r-memoised', formula_discovered:'r-formula', skipped:'r-skipped' }[t] || 'r-unknown';
+    return `<div class="safety-row"><span class="badge badge-${safetyOf(t)}">${t}</span> <span class="${cls}" style="font-family:monospace">${escHtml(l)}</span></div>`;
+  }).join('');
+  outEl.innerHTML = `
+    <div class="report-box" style="margin-bottom:14px">${lines.map(l => escHtml(l)).join('\n')}</div>
+    <div style="color:#6a8aaa;font-size:0.8rem;margin-bottom:6px">Styled view:</div>
+    <div>${htmlLines}</div>`;
+}
+
+function safetyOf(type) {
+  if (type === 'skipped') return 'unsafe';
+  if (type === 'formula_discovered' || type === 'unfolded' || type === 'memoised') return 'safe';
+  return 'unknown';
+}
+
+// ============================================================
+// INIT: load default example
+// ============================================================
+document.addEventListener('DOMContentLoaded', () => {
+  loadExample('stage1');
+});
+</script>
+</body>
+</html>
