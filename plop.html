@@ -1176,7 +1176,8 @@ function isSafeHoistRecursive(goal, ir, visiting) {
   if (!isSafeHoistGoal(goal)) return false;
   const fa = getGoalFunctor(goal);
   if (!fa) return true;
-  if (visiting.has(fa)) return false; // recursive predicate — unsafe
+  // Recursive predicates may not terminate, so their cost is unbounded — skip.
+  if (visiting.has(fa)) return false;
   const clauses = ir.filter(c => getFunctor(c.head) === fa);
   if (clauses.length > 1) return false; // nondeterministic
   if (clauses.length === 1) {
@@ -1184,7 +1185,7 @@ function isSafeHoistRecursive(goal, ir, visiting) {
     newVisiting.add(fa);
     return clauses[0].body.every(g => isSafeHoistRecursive(g, ir, newVisiting));
   }
-  return true; // built-in or unknown — already checked above
+  return true; // built-in or unknown — already checked by isSafeHoistGoal above
 }
 
 // Expand a goal one level if it has exactly one clause with a non-empty body.
@@ -1192,10 +1193,8 @@ function expandGoalOne(goal, ir) {
   const fa = getGoalFunctor(goal);
   if (!fa) return null;
   const clauses = ir.filter(c => getFunctor(c.head) === fa);
-  if (clauses.length !== 1) return null;
-  const clause = clauses[0];
-  if (clause.body.length === 0) return null;
-  const fresh = freshenClause(clause);
+  if (clauses.length !== 1 || clauses[0].body.length === 0) return null;
+  const fresh = freshenClause(clauses[0]);
   const env = unify(fresh.head, goal, new Map());
   if (!env) return null;
   return fresh.body.map(g => subst(g, env));
@@ -1300,6 +1299,7 @@ function spliceClause(clause, ir) {
     }
     if (!bestGroup || sorted.length > bestGroup.length ||
         (sorted.length === bestGroup.length && prefixLen > bestPrefixLen)) {
+      // Prefer the group with more members (more sharing); break ties by longer prefix.
       bestGroup = sorted;
       bestPrefixLen = prefixLen;
     }
@@ -1315,12 +1315,12 @@ function spliceClause(clause, ir) {
   for (let mi = 1; mi < bodies.length; mi++) {
     for (let pi = 0; pi < bestPrefixLen; pi++) {
       const e = unify(canonPrefix[pi], bodies[mi][pi], env);
-      if (!e) return { spliced: clause, items: [] };
+      if (!e) return { spliced: clause, items: skippedItems };
       env = e;
     }
   }
 
-  // Expand the hoisted prefix goals one more level (like expand_goal_fully).
+  // Expand each hoisted prefix goal one level if it has a single-clause definition.
   const finalPrefix = canonPrefix
     .map(g => subst(g, env))
     .flatMap(g => expandGoalFully(g, ir));
