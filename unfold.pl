@@ -58,8 +58,30 @@ unfoldable_helper(ProgramIR, ir_clause(_, Head, Body, _)) :-
     clause_predicate_from_goal(Head, Pred),
     findall(C, (member(C, ProgramIR), clause_matches_predicate(C, Pred)), Clauses),
     length(Clauses, 1),
+    predicate_call_count(ProgramIR, Pred, CallCount),
+    CallCount =< 1,
     \+ calls_predicate(Body, Pred),
+    \+ calls_user_defined_predicate(Body, ProgramIR),
     forall(member(G, Body), safe_inline_goal(G)).
+
+predicate_call_count(ProgramIR, Pred, Count) :-
+    findall(
+        1,
+        (
+            member(ir_clause(_, _, Body, _), ProgramIR),
+            member(Goal, Body),
+            clause_predicate_from_goal(Goal, Pred)
+        ),
+        Calls
+    ),
+    length(Calls, Count).
+
+calls_user_defined_predicate(Goals, ProgramIR) :-
+    member(Goal, Goals),
+    clause_predicate_from_goal(Goal, GoalPred),
+    member(ir_clause(_, Head, _, _), ProgramIR),
+    clause_predicate_from_goal(Head, GoalPred),
+    !.
 
 clause_matches_predicate(ir_clause(_, Head, _, _), Pred) :-
     clause_predicate_from_goal(Head, Pred).
