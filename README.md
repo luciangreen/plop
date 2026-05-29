@@ -1,8 +1,5 @@
 # plop
 
-```
-README.md
-
 Optimiser
 
 Optimiser is a SWI-Prolog source-to-source optimiser for symbolic and recursive Prolog programs.
@@ -21,6 +18,7 @@ Implemented stages include:
 * Gaussian elimination formula discovery
 * list-manipulation-to-formula optimisation
 * shortcut splicing
+* hierarchical shared-subgoal splicing
 * deterministic loop conversion
 * safety classification
 * optimisation reporting
@@ -176,6 +174,51 @@ Output:
 
 sum_to_n(N,S) :-
     S is N*(N+1)//2.
+
+⸻
+
+Stage 18 — Hierarchical Shared-Subgoal Splicing
+
+Input:
+
+```prolog
+expensive(X, A) :-
+    expensive_sub(X, S),
+    finish(S, A).
+
+template1(X, T1) :-
+    expensive(X, A),
+    T1 = row1(A).
+
+template2(X, T2) :-
+    expensive(X, A),
+    T2 = row2(A).
+
+report(X, Z) :-
+    template1(X, T1),
+    template2(X, T2),
+    Z = [T1,T2].
+```
+
+Run:
+
+```sh
+swipl -q -s optimiser.pl \
+  -g "optimise_file('examples/hierarchical_splice_input.pl', \
+                    'out/hierarchical_splice_output.pl')" \
+  -t halt
+```
+
+Output:
+
+```prolog
+report(X, Z) :-
+    expensive_sub(X, S),
+    finish(S, A),
+    T1 = row1(A),
+    T2 = row2(A),
+    Z = [T1,T2].
+```
 
 ⸻
 
@@ -365,4 +408,3 @@ Licence
 BSD 3-Clause License.
 
 Copyright © 2026 Lucian Green.
-```
