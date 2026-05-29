@@ -226,6 +226,7 @@
   <button onclick="showTab('formula',this)">Formula Discovery</button>
   <button onclick="showTab('safety',this)">Safety Analysis</button>
   <button onclick="showTab('reporter',this)">Reporter</button>
+  <button onclick="showTab('hierarchical',this)">Hierarchical Splice</button>
 </nav>
 
 <!-- ===== OPTIMISER TAB ===== -->
@@ -383,8 +384,38 @@
   </div>
 </div>
 
+<!-- ===== HIERARCHICAL SPLICE TAB ===== -->
+<div id="tab-hierarchical" class="tab-content">
+  <div class="info-strip">
+    Stage 18 — Hierarchical Shared-Subgoal Splicing: detect predicates that call the same pure deterministic subgoal, hoist the shared computation once, and splice the remaining template bodies (implements <code>build_dependency_graph/3</code>, <code>hoist_common_dependencies/4</code>, <code>hierarchical_splice_program/3</code>).
+  </div>
+  <div class="examples-row">
+    <span style="color:#4a6080;font-size:0.8rem;align-self:center">Examples:</span>
+    <button class="ex-btn" onclick="loadHierarchicalExample('two_templates')">Two Templates</button>
+    <button class="ex-btn" onclick="loadHierarchicalExample('three_templates')">Three Templates</button>
+    <button class="ex-btn" onclick="loadHierarchicalExample('side_effect')">Side Effect (skipped)</button>
+  </div>
+  <div class="two-col">
+    <div class="panel">
+      <h2>Input Program</h2>
+      <textarea id="hs-input" rows="20" placeholder="Enter Prolog program here…"></textarea>
+      <div class="btn-row">
+        <button class="primary" onclick="runHierarchicalSplice()" aria-label="Run hierarchical splice">▶ Splice</button>
+        <button class="secondary" onclick="clearHS()">Clear</button>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Optimised Output</h2>
+      <pre id="hs-output" class="empty-state">Output will appear here…</pre>
+    </div>
+  </div>
+  <div class="panel">
+    <h2>Optimisation Report</h2>
+    <div id="hs-report" class="report-box empty-state">No report yet.</div>
+  </div>
+</div>
+
 <script>
-'use strict';
 
 // ============================================================
 // 1. TERM REPRESENTATION
@@ -1114,7 +1145,217 @@ function memoiseProgram(ir) {
 }
 
 // ============================================================
-// 8. STAGE 3 – FORMULA SIMPLIFICATION (sum_to_n pattern)
+// 8. STAGE 18 – HIERARCHICAL SHARED-SUBGOAL SPLICING
+// ============================================================
+
+const UNSAFE_HOIST = new Set([
+  'assert/1','assertz/1','asserta/1','retract/1','retractall/1',
+  'write/1','writeln/1','print/1','nl/0','format/1','format/2','format/3',
+  'read/1','read_term/2','read_term/3','open/3','close/1','close/2',
+  'put_char/1','get_char/1','get_code/1','see/1','tell/1',
+  'call/1','call/2','call/3','call/4','once/1','ignore/1',
+  'findall/3','bagof/3','setof/3','maplist/2','maplist/3','maplist/4','forall/2',
+  'random/1','random/3','random_between/3','setrand/1','getrand/1',
+  'var/1','nonvar/1'
+]);
+
+function isSafeHoistGoal(goal) {
+  if (goal.t === 'a') return goal.n !== '!';
+  if (goal.t === 'c') {
+    const f = goal.f;
+    if (f === ';' || f === '->' || f === '\\+' || f === ',') return false;
+    const fa = `${f}/${goal.a.length}`;
+    if (UNSAFE_HOIST.has(fa)) return false;
+  }
+  return true;
+}
+
+// Recursively check that a goal and all goals reachable through single-clause
+// definitions are safe to hoist (no side effects, cuts, meta-calls, etc.).
+function isSafeHoistRecursive(goal, ir, visiting) {
+  if (!isSafeHoistGoal(goal)) return false;
+  const fa = getGoalFunctor(goal);
+  if (!fa) return true;
+  if (visiting.has(fa)) return false; // recursive predicate — unsafe
+  const clauses = ir.filter(c => getFunctor(c.head) === fa);
+  if (clauses.length > 1) return false; // nondeterministic
+  if (clauses.length === 1) {
+    const newVisiting = new Set(visiting);
+    newVisiting.add(fa);
+    return clauses[0].body.every(g => isSafeHoistRecursive(g, ir, newVisiting));
+  }
+  return true; // built-in or unknown — already checked above
+}
+
+// Expand a goal one level if it has exactly one clause with a non-empty body.
+function expandGoalOne(goal, ir) {
+  const fa = getGoalFunctor(goal);
+  if (!fa) return null;
+  const clauses = ir.filter(c => getFunctor(c.head) === fa);
+  if (clauses.length !== 1) return null;
+  const clause = clauses[0];
+  if (clause.body.length === 0) return null;
+  const fresh = freshenClause(clause);
+  const env = unify(fresh.head, goal, new Map());
+  if (!env) return null;
+  return fresh.body.map(g => subst(g, env));
+}
+
+// Like expand_goal_fully/3 in Prolog: expand one level, return [goal] if not expandable.
+function expandGoalFully(goal, ir) {
+  const expanded = expandGoalOne(goal, ir);
+  return expanded !== null ? expanded : [goal];
+}
+
+// Check if two terms are variants of each other (alpha-equivalent).
+// map12/map21 track the bidirectional variable renaming.
+function termsVariantOf(t1, t2, map12, map21) {
+  if (t1.t === 'v' && t2.t === 'v') {
+    if (map12.has(t1.id)) return map12.get(t1.id) === t2.id;
+    if (map21.has(t2.id)) return false;
+    map12.set(t1.id, t2.id);
+    map21.set(t2.id, t1.id);
+    return true;
+  }
+  if (t1.t !== t2.t) return false;
+  if (t1.t === 'a') return t1.n === t2.n;
+  if (t1.t === 'n') return t1.v === t2.v;
+  if (t1.t === 'c') {
+    if (t1.f !== t2.f || t1.a.length !== t2.a.length) return false;
+    return t1.a.every((a, i) => termsVariantOf(a, t2.a[i], map12, map21));
+  }
+  return false;
+}
+
+// Check whether all bodies share a variant prefix of exactly `len` goals.
+function bodyPrefixesVariant(bodies, len) {
+  const ref = bodies[0];
+  for (let mi = 1; mi < bodies.length; mi++) {
+    const map12 = new Map(), map21 = new Map();
+    for (let i = 0; i < len; i++) {
+      if (bodies[mi].length <= i || !termsVariantOf(ref[i], bodies[mi][i], map12, map21)) return false;
+    }
+  }
+  return true;
+}
+
+// Find the longest common prefix length across all bodies.
+function longestCommonPrefix(bodies) {
+  if (bodies.length < 2) return 0;
+  const minLen = Math.min(...bodies.map(b => b.length));
+  let len = 0;
+  for (let i = 0; i < minLen; i++) {
+    if (bodyPrefixesVariant(bodies, i + 1)) len = i + 1;
+    else break;
+  }
+  return len;
+}
+
+function hierarchicalSpliceProgram(ir) {
+  const report = [];
+  const result = ir.map(clause => {
+    const { spliced, items } = spliceClause(clause, ir);
+    report.push(...items);
+    return spliced;
+  });
+  return { ir: result, report: dedupeReport(report) };
+}
+
+function spliceClause(clause, ir) {
+  const body = clause.body;
+
+  // Collect expandable body positions with their one-level expansions.
+  const expansions = [];
+  for (let i = 0; i < body.length; i++) {
+    const expanded = expandGoalOne(body[i], ir);
+    if (expanded !== null) expansions.push({ idx: i, goal: body[i], expanded });
+  }
+  if (expansions.length < 2) return { spliced: clause, items: [] };
+
+  // Group by the functor of the first expanded goal (shared subgoal functor).
+  const groups = new Map();
+  for (const e of expansions) {
+    const key = getGoalFunctor(e.expanded[0]);
+    if (!key) continue;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(e);
+  }
+
+  // Find best group: ≥2 members, contiguous positions, longest shared variant prefix.
+  let bestGroup = null, bestPrefixLen = 0;
+  const skippedItems = [];
+  for (const members of groups.values()) {
+    if (members.length < 2) continue;
+    const sorted = [...members].sort((a, b) => a.idx - b.idx);
+    const positions = sorted.map(m => m.idx);
+    const isContiguous = positions[positions.length - 1] - positions[0] + 1 === positions.length;
+    if (!isContiguous) continue;
+    const bodies = sorted.map(m => m.expanded);
+    const prefixLen = longestCommonPrefix(bodies);
+    if (prefixLen === 0) continue;
+    const prefixGoals = bodies[0].slice(0, prefixLen);
+    if (!prefixGoals.every(g => isSafeHoistRecursive(g, ir, new Set()))) {
+      skippedItems.push({ type: 'skipped_hierarchical_splice', pred: getFunctor(clause.head), reason: 'unsafe_prefix' });
+      continue;
+    }
+    if (!bestGroup || sorted.length > bestGroup.length ||
+        (sorted.length === bestGroup.length && prefixLen > bestPrefixLen)) {
+      bestGroup = sorted;
+      bestPrefixLen = prefixLen;
+    }
+  }
+
+  if (!bestGroup) return { spliced: clause, items: skippedItems };
+
+  // Unify the prefix goals of all members against the first member's prefix
+  // so that output variables shared across templates are merged.
+  const bodies = bestGroup.map(m => m.expanded);
+  let env = new Map();
+  const canonPrefix = bodies[0].slice(0, bestPrefixLen);
+  for (let mi = 1; mi < bodies.length; mi++) {
+    for (let pi = 0; pi < bestPrefixLen; pi++) {
+      const e = unify(canonPrefix[pi], bodies[mi][pi], env);
+      if (!e) return { spliced: clause, items: [] };
+      env = e;
+    }
+  }
+
+  // Expand the hoisted prefix goals one more level (like expand_goal_fully).
+  const finalPrefix = canonPrefix
+    .map(g => subst(g, env))
+    .flatMap(g => expandGoalFully(g, ir));
+
+  // Collect the suffix of each member after the shared prefix.
+  const suffixes = bodies.map(b => b.slice(bestPrefixLen).map(g => subst(g, env)));
+
+  // Rebuild the clause body: replace the group with [prefix, ...suffixes], keep rest.
+  const selectedPositions = new Set(bestGroup.map(m => m.idx));
+  const firstPos = bestGroup[0].idx;
+  const newBody = [];
+  for (let i = 0; i < body.length; i++) {
+    if (i === firstPos) {
+      newBody.push(...finalPrefix);
+      for (const suffix of suffixes) newBody.push(...suffix);
+    } else if (selectedPositions.has(i)) {
+      // Skip — merged at firstPos
+    } else {
+      newBody.push(subst(body[i], env));
+    }
+  }
+
+  const pred = getFunctor(clause.head);
+  const sharedPred = getGoalFunctor(canonPrefix[0]) || 'unknown';
+  const items = [
+    { type: 'dependency_graph_built', pred },
+    { type: 'common_dependency_hoisted', pred: sharedPred, count: bestGroup.length },
+    { type: 'hierarchical_spliced', pred }
+  ];
+
+  return { spliced: { ...clause, body: newBody }, items };
+}
+
+// ============================================================
+// 8a. STAGE 3 – FORMULA SIMPLIFICATION (sum_to_n pattern)
 // ============================================================
 
 function matchNum(term, v) { return term.t === 'n' && term.v === v; }
@@ -1425,13 +1666,17 @@ function classifyBodySafety(body) {
 
 function reportLine(item) {
   switch (item.type) {
-    case 'unfolded':          return `unfolded: ${item.pred}`;
-    case 'memoised':          return `memoised: ${item.pred}`;
-    case 'formula_discovered': return `formula_discovered: ${item.pred} => ${item.formula}`;
-    case 'indexical_mapping': return `indexical_mapping: ${item.pred} => ${item.mapping}`;
-    case 'loop_converted':    return `loop_converted: ${item.pred}`;
-    case 'skipped':           return `skipped: ${item.pred} (${item.reason})`;
-    default:                  return JSON.stringify(item);
+    case 'unfolded':                   return `unfolded: ${item.pred}`;
+    case 'memoised':                   return `memoised: ${item.pred}`;
+    case 'formula_discovered':         return `formula_discovered: ${item.pred} => ${item.formula}`;
+    case 'indexical_mapping':          return `indexical_mapping: ${item.pred} => ${item.mapping}`;
+    case 'loop_converted':             return `loop_converted: ${item.pred}`;
+    case 'skipped':                    return `skipped: ${item.pred} (${item.reason})`;
+    case 'dependency_graph_built':     return `dependency_graph_built: ${item.pred}`;
+    case 'common_dependency_hoisted':  return `common_dependency_hoisted: ${item.pred} (×${item.count})`;
+    case 'hierarchical_spliced':       return `hierarchical_spliced: ${item.pred}`;
+    case 'skipped_hierarchical_splice': return `skipped_hierarchical_splice: ${item.pred} (${item.reason})`;
+    default:                           return JSON.stringify(item);
   }
 }
 
@@ -1449,7 +1694,11 @@ function renderReport(items, el) {
       unfolded: 'r-unfolded',
       memoised: 'r-memoised',
       formula_discovered: 'r-formula',
-      skipped: 'r-skipped'
+      skipped: 'r-skipped',
+      dependency_graph_built: 'r-unknown',
+      common_dependency_hoisted: 'r-unfolded',
+      hierarchical_spliced: 'r-unfolded',
+      skipped_hierarchical_splice: 'r-skipped'
     }[item.type] || 'r-unknown';
     return `<span class="${cls}">${escHtml(line)}</span>`;
   }).join('\n');
@@ -1570,6 +1819,56 @@ const GAUSS_EXAMPLES = {
   linear: `1 1 3\n1 2 5\n1 3 7`
 };
 
+const HS_EXAMPLES = {
+  two_templates: `% Stage 18 – Two templates share expensive/2 subgoal
+expensive(X, A) :-
+    expensive_sub(X, S),
+    finish(S, A).
+template1(X, T1) :-
+    expensive(X, A),
+    T1 = row1(A).
+template2(X, T2) :-
+    expensive(X, A),
+    T2 = row2(A).
+report(X, Z) :-
+    template1(X, T1),
+    template2(X, T2),
+    Z = [T1,T2].`,
+
+  three_templates: `% Stage 18 – Three templates share expensive/2 subgoal
+expensive(X, A) :-
+    compute(X, A).
+t1(X, R1) :-
+    expensive(X, A),
+    R1 = a(A).
+t2(X, R2) :-
+    expensive(X, A),
+    R2 = b(A).
+t3(X, R3) :-
+    expensive(X, A),
+    R3 = c(A).
+report(X, Z) :-
+    t1(X, R1),
+    t2(X, R2),
+    t3(X, R3),
+    Z = [R1,R2,R3].`,
+
+  side_effect: `% Stage 18 – Side effect in shared subgoal prevents hoisting
+logging(X, A) :-
+    writeln(X),
+    A = done.
+t1(X, R1) :-
+    logging(X, A),
+    R1 = first(A).
+t2(X, R2) :-
+    logging(X, A),
+    R2 = second(A).
+combined(X, Z) :-
+    t1(X, R1),
+    t2(X, R2),
+    Z = [R1,R2].`
+};
+
 // ============================================================
 // UI HANDLERS
 // ============================================================
@@ -1587,6 +1886,42 @@ function loadExample(name) {
 
 function loadGaussExample(name) {
   document.getElementById('gauss-input').value = GAUSS_EXAMPLES[name] || '';
+}
+
+function loadHierarchicalExample(name) {
+  document.getElementById('hs-input').value = HS_EXAMPLES[name] || '';
+}
+
+function clearHS() {
+  document.getElementById('hs-input').value = '';
+  document.getElementById('hs-output').textContent = 'Output will appear here…';
+  document.getElementById('hs-output').className = 'empty-state';
+  document.getElementById('hs-report').innerHTML = '<span class="empty-state">No report yet.</span>';
+}
+
+function runHierarchicalSplice() {
+  const src = document.getElementById('hs-input').value;
+  const outEl = document.getElementById('hs-output');
+  const repEl = document.getElementById('hs-report');
+
+  if (!src.trim()) { outEl.textContent = 'Please enter a Prolog program.'; outEl.className = ''; return; }
+
+  let ir;
+  try { ir = parseProgram(src); } catch (e) {
+    outEl.textContent = 'Parse error: ' + e.message;
+    outEl.className = '';
+    return;
+  }
+  if (!ir || ir.length === 0) {
+    outEl.textContent = 'No clauses found.';
+    outEl.className = '';
+    return;
+  }
+
+  const { ir: spliced, report } = hierarchicalSpliceProgram(ir);
+  outEl.className = '';
+  outEl.textContent = programStr(spliced);
+  renderReport(report, repEl);
 }
 
 function clearOpt() {
@@ -1833,8 +2168,9 @@ function runReporter() {
 }
 
 function safetyOf(type) {
-  if (type === 'skipped') return 'unsafe';
-  if (type === 'formula_discovered' || type === 'unfolded' || type === 'memoised') return 'safe';
+  if (type === 'skipped' || type === 'skipped_hierarchical_splice') return 'unsafe';
+  if (type === 'formula_discovered' || type === 'unfolded' || type === 'memoised' ||
+      type === 'common_dependency_hoisted' || type === 'hierarchical_spliced') return 'safe';
   return 'unknown';
 }
 
