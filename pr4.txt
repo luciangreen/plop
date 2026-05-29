@@ -1,0 +1,135 @@
+Yes. Add it as Plop Stage 18: Hierarchical Shared-Subgoal Splicing.
+
+Program requirements
+
+Goal
+
+Optimise repeated nested expensive predicates by computing the shared dependency once, then splicing multiple dependent templates from that result.
+
+Plop already has unfolding, memoisation, shortcut splicing, deterministic loop conversion, and safety classification, so this should extend Plop rather than become a separate repo.  ￼
+
+New files
+
+dependency_graph.pl
+common_dependency_hoist.pl
+hierarchical_splice.pl
+examples/hierarchical_splice_input.pl
+out/hierarchical_splice_output.pl
+tests/test_hierarchical_splice.pl
+
+Input example
+
+expensive(X, A) :-
+    expensive_sub(X, S),
+    finish(S, A).
+template1(X, T1) :-
+    expensive(X, A),
+    T1 = row1(A).
+template2(X, T2) :-
+    expensive(X, A),
+    T2 = row2(A).
+report(X, Z) :-
+    template1(X, T1),
+    template2(X, T2),
+    Z = [T1,T2].
+
+Required output
+
+report(X, Z) :-
+    expensive_sub(X, S),
+    finish(S, A),
+    T1 = row1(A),
+    T2 = row2(A),
+    Z = [T1,T2].
+
+Core optimisation rule
+
+If two or more predicates call the same pure deterministic subgoal
+with equivalent input arguments,
+and their outputs are later combined,
+then hoist the shared subgoal once,
+reuse its result variables,
+and splice the remaining template bodies after it.
+
+Required pipeline position
+
+Add after unfolding and before memoisation:
+
+optimise_program(ProgramIR, OptimisedIR, optimisation_report(Items)) :-
+    unfold_program(ProgramIR, UnfoldedIR, UnfoldItems),
+    build_dependency_graph(UnfoldedIR, Graph, GraphItems),
+    hoist_common_dependencies(UnfoldedIR, Graph, HoistedIR, HoistItems),
+    hierarchical_splice_program(HoistedIR, SplicedHierarchyIR, HSpliceItems),
+    memoise_program(SplicedHierarchyIR, MemoisedIR, MemoItems),
+    ...
+
+Plop’s current pipeline already runs unfolding before memoisation and later uses splice and deterministic loop conversion, so this fits the existing architecture.  ￼
+
+Safety rules
+
+Only optimise when all shared subgoals are:
+
+pure
+deterministic
+finite
+non-IO
+non-meta
+non-database-mutating
+non-cut-sensitive
+
+Reject or skip:
+
+!
+;
+->
+\+
+call/1
+assert/retract
+read/write/open/close
+random predicates
+var/1-sensitive code
+
+This matches the existing Plop/loop2 philosophy of skipping unsafe cases rather than pretending full Prolog semantics are preserved.  ￼  ￼
+
+Reports
+
+Add report terms:
+
+dependency_graph_built(Predicate).
+common_dependency_hoisted(Subgoal, Count).
+hierarchical_spliced(Predicate).
+skipped_hierarchical_splice(Predicate, Reason).
+
+Example:
+
+optimisation_report([
+    unfolded(report/2),
+    dependency_graph_built(report/2),
+    common_dependency_hoisted(expensive/2, 2),
+    hierarchical_spliced(report/2)
+]).
+
+Tests
+
+Required tests:
+
+:- begin_tests(hierarchical_splice).
+test(two_templates_share_expensive).
+test(shared_subpredicate_inside_expensive).
+test(three_templates_share_expensive).
+test(skip_if_side_effect).
+test(skip_if_cut).
+test(skip_if_nondeterministic).
+test(preserves_output_order).
+:- end_tests(hierarchical_splice).
+
+Success criterion
+
+This command should work:
+
+swipl -q -s optimiser.pl \
+  -g "optimise_file('examples/hierarchical_splice_input.pl',
+                    'out/hierarchical_splice_output.pl')" \
+  -t halt
+
+and produce one shared computation followed by multiple spliced template outputs.
