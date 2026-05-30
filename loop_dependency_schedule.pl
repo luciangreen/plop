@@ -5,10 +5,19 @@
 :- use_module(safety, [classify_goal_safety/2, experimental_mode/1]).
 
 schedule_dependencies(BodyIn, _DepGraph, BodyOut, Report) :-
-    schedule_sequence(BodyIn, [], [], 0, _LoopCounterOut, BodyOut, counts(0, 0, 0), Counts),
+    normalise_body_list(BodyIn, BodyListIn),
+    schedule_sequence(BodyListIn, [], [], 0, _LoopCounterOut, BodyListOut, counts(0, 0, 0), Counts),
+    denormalise_body_list(BodyIn, BodyListOut, BodyOut),
     counts_report(Counts, Report).
 
 schedule_sequence([], _LoopCtx, _ActiveHoists, LoopCounter, LoopCounter, [], Counts, Counts).
+schedule_sequence([TermIn|RestIn], LoopCtx, ActiveHoists, LoopCounterIn, LoopCounterOut, TermsOut, CountsIn, CountsOut) :-
+    is_hoisted_term(TermIn),
+    !,
+    schedule_hoisted_term(TermIn, RestIn, LoopCtx, ActiveHoists, CountsIn, CountsMid, TermOut, ActiveHoistsMid),
+    schedule_sequence(RestIn, LoopCtx, ActiveHoistsMid, LoopCounterIn, LoopCounterOut,
+                      RestOut, CountsMid, CountsOut),
+    TermsOut = [TermOut|RestOut].
 schedule_sequence([TermIn|RestIn], LoopCtx, ActiveHoists, LoopCounterIn, LoopCounterOut, TermsOut, CountsIn, CountsOut) :-
     schedule_term(TermIn, LoopCtx, ActiveHoists, LoopCounterIn, LoopCounterMid,
                   TermOut, ActiveHoistsMid, CountsIn, CountsMid),
@@ -18,6 +27,21 @@ schedule_sequence([TermIn|RestIn], LoopCtx, ActiveHoists, LoopCounterIn, LoopCou
         TermsOut = RestOut
     ; TermsOut = [TermOut|RestOut]
     ).
+
+is_hoisted_term(hoisted(_)).
+is_hoisted_term(hoisted(_, _)).
+
+schedule_hoisted_term(hoisted(Goal), RestIn, LoopCtx, ActiveHoists, CountsIn, CountsOut,
+                      hoisted(Scope, Goal), ActiveHoistsOut) :-
+    determine_scope_with_usage(Goal, LoopCtx, RestIn, Scope),
+    maybe_add_active_hoist(Scope, Goal, ActiveHoists, ActiveHoistsOut),
+    increment_scope_count(Scope, CountsIn, CountsOut).
+schedule_hoisted_term(hoisted(ScopeIn, Goal), RestIn, LoopCtx, ActiveHoists, CountsIn, CountsOut,
+                      hoisted(Scope, Goal), ActiveHoistsOut) :-
+    normalise_scope(ScopeIn, Goal, LoopCtx, Scope0),
+    adjust_scope_with_usage(Scope0, Goal, LoopCtx, RestIn, Scope),
+    maybe_add_active_hoist(Scope, Goal, ActiveHoists, ActiveHoistsOut),
+    increment_scope_count(Scope, CountsIn, CountsOut).
 
 schedule_term(hoisted(Goal), LoopCtx, ActiveHoists, LoopCounter, LoopCounter,
               hoisted(Scope, Goal), ActiveHoistsOut, CountsIn, CountsOut) :-
@@ -86,19 +110,71 @@ determine_scope(Goal, LoopCtx, global) :-
     term_variables(Goal, GoalVars),
     \+ goal_depends_on_loop_var(GoalVars, LoopCtx, _),
     !.
+determine_scope(Goal, LoopCtx, local) :-
+    term_variables(Goal, GoalVars),
+    goal_depends_on_innermost_loop_var(GoalVars, LoopCtx),
+    !.
 determine_scope(Goal, LoopCtx, loop(LoopLabel)) :-
     term_variables(Goal, GoalVars),
     goal_depends_on_loop_var(GoalVars, LoopCtx, LoopLabel),
     !.
 determine_scope(_Goal, _LoopCtx, local).
 
+determine_scope_with_usage(Goal, LoopCtx, RestIn, Scope) :-
+    determine_scope(Goal, LoopCtx, Scope0),
+    adjust_scope_with_usage(Scope0, Goal, LoopCtx, RestIn, Scope).
+
+adjust_scope_with_usage(local, Goal, LoopCtx, RestIn, Scope) :-
+    term_variables(Goal, GoalVars),
+    goal_depends_on_innermost_loop_var(GoalVars, LoopCtx),
+    \+ goal_occurs_same_scope(Goal, RestIn),
+    goal_occurs_in_nested_loop(Goal, RestIn),
+    current_loop_scope(LoopCtx, Scope),
+    !.
+adjust_scope_with_usage(Scope, _Goal, _LoopCtx, _RestIn, Scope).
+
 goal_depends_on_loop_var(GoalVars, LoopCtx, LoopLabel) :-
     member(loop_ctx(IndexVar, LoopLabel), LoopCtx),
     memberchk(IndexVar, GoalVars),
     !.
 
+goal_depends_on_innermost_loop_var(GoalVars, LoopCtx) :-
+    append(_, [loop_ctx(InnerVar, _)], LoopCtx),
+    memberchk(InnerVar, GoalVars).
+
+current_loop_scope(LoopCtx, loop(Label)) :-
+    append(_, [loop_ctx(_, Label)], LoopCtx).
+
+goal_occurs_same_scope(Goal, RestTerms) :-
+    member(Term, RestTerms),
+    Goal =@= Term.
+
+goal_occurs_in_nested_loop(Goal, RestTerms) :-
+    member(Term, RestTerms),
+    goal_occurs_in_nested_loop_term(Goal, Term),
+    !.
+
+goal_occurs_in_nested_loop_term(Goal, for(_, _, _, Body)) :-
+    normalise_body_list(Body, Goals),
+    goal_occurs_in_term_list(Goal, Goals),
+    !.
+goal_occurs_in_nested_loop_term(Goal, and(Goals)) :-
+    goal_occurs_in_nested_loop(Goal, Goals).
+goal_occurs_in_nested_loop_term(Goal, or(Goals)) :-
+    goal_occurs_in_nested_loop(Goal, Goals).
+goal_occurs_in_nested_loop_term(_Goal, _Term) :-
+    fail.
+
+goal_occurs_in_term_list(Goal, Terms) :-
+    member(Term, Terms),
+    ( Goal =@= Term
+    ; goal_occurs_in_nested_loop_term(Goal, Term)
+    ),
+    !.
+
 goal_hoist_allowed(Goal) :-
-    classify_goal_safety(Goal, safe),
+    classify_goal_safety(Goal, Safety),
+    Safety \== unsafe,
     !.
 goal_hoist_allowed(_Goal) :-
     experimental_mode(true).

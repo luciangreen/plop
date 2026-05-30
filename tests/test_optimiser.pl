@@ -685,6 +685,8 @@ test(optimise_program_allows_unsafe_and_unknown_in_experimental_mode, [cleanup(s
 
 :- use_module('../loop_dependency_schedule').
 :- use_module('../reporter').
+:- use_module('../safety').
+:- use_module('../optimiser').
 
 test(global_invariant_dep_hoist) :-
     BodyIn = [
@@ -772,9 +774,9 @@ test(reporter_renders_stage19_lines) :-
         global_hoisted_count(2),
         left_in_loop_count(3)
     ]), Lines),
-    assertion(member("Loop hoisted deps: 1", Lines)),
-    assertion(member("Global hoisted deps: 2", Lines)),
-    assertion(member("Deps left in loop: 3", Lines)).
+    assertion(member('Loop hoisted deps: 1', Lines)),
+    assertion(member('Global hoisted deps: 2', Lines)),
+    assertion(member('Deps left in loop: 3', Lines)).
 
 :- end_tests(loop_dependency_schedule).
 
