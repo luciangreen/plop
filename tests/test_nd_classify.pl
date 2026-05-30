@@ -146,6 +146,8 @@ test(nd_classify_program_annotates_all_predicates) :-
     ],
     nd_classify_program(ProgramIR, _ClassifiedIR, Report),
     assertion(member(nd_classified(add/3, deterministic, _), Report)),
-    assertion(member(nd_classified(collect/2, map_compatible, _), Report)).
+    assertion(member(nd_classified(collect/2, map_compatible, _), Report)),
+    assertion(member(mnn_signature_unknown(add/3, _), Report)),
+    assertion(member(mnn_signature_matched(collect/2, _), Report)).
 
 :- end_tests(nd_classify).

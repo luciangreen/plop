@@ -7,6 +7,7 @@
 ]).
 
 :- use_module(safety, [has_side_effects/1, has_cut/1, classify_goal_safety/2]).
+:- use_module(mnn_signature, [mnn_signature/2, mnn_lookup_class/2]).
 
 :- dynamic nd_decl/2.
 
@@ -22,8 +23,18 @@ nd_classify_program(ProgramIR, ClassifiedIR, Report) :-
             member(Predicate, Predicates),
             nd_classify_predicate(Predicate, ProgramIR, Class, Reasons)
         ),
-        Report
+        ClassReport
     ),
+    findall(
+        SignatureItem,
+        (
+            member(Predicate, Predicates),
+            clauses_for_predicate(Predicate, ProgramIR, Clauses),
+            predicate_signature_item(Predicate, Clauses, SignatureItem)
+        ),
+        SignatureReport
+    ),
+    append(ClassReport, SignatureReport, Report),
     annotate_program(ProgramIR, Report, ClassifiedIR).
 
 annotate_program([], _, []).
@@ -50,6 +61,8 @@ classify_clauses(Clauses, ProgramIR, Class, Reasons) :-
     ;   any_clause_matches(body_contains_interpreter_construct, Clauses)
     ->  Class = requires_interpreter_construct,
         Reasons = [contains_meta_call]
+    ;   clauses_match_signature_pattern(Clauses, Class, Signature)
+    ->  Reasons = [mnn_signature(Signature)]
     ;   clauses_match_splice_pattern(Clauses)
     ->  Class = splice_compatible,
         Reasons = [repeated_expensive_shared_template]
@@ -74,6 +87,28 @@ classify_clauses(Clauses, ProgramIR, Class, Reasons) :-
     ;   Class = unknown_cost_dependency,
         Reasons = [requires_declarations]
     ).
+
+clauses_match_signature_pattern(Clauses, Class, Signature) :-
+    member(Clause, Clauses),
+    mnn_signature(Clause, Signature),
+    known_mnn_signature(Signature),
+    mnn_lookup_class(Signature, Class),
+    !.
+
+predicate_signature_item(Predicate, Clauses, mnn_signature_matched(Predicate, Signature)) :-
+    member(Clause, Clauses),
+    mnn_signature(Clause, Signature),
+    known_mnn_signature(Signature),
+    !.
+predicate_signature_item(Predicate, [Clause | _], mnn_signature_unknown(Predicate, Signature)) :-
+    mnn_signature(Clause, Signature),
+    (Signature == sig_unknown ; Signature == sig_unknown_cost_dependency),
+    !.
+predicate_signature_item(Predicate, _Clauses, mnn_signature_unknown(Predicate, sig_unknown)).
+
+known_mnn_signature(Signature) :-
+    Signature \== sig_unknown,
+    Signature \== sig_unknown_cost_dependency.
 
 any_clause_matches(Predicate, Clauses) :-
     member(ir_clause(_, _, Body, _), Clauses),

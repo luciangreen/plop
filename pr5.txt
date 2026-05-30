@@ -1,5 +1,8 @@
 Below is a further GitHub Agent Program Requirements block for the current Plop repo, extending its existing optimiser, JS web UI, tests, and README structure. Plop already includes optimiser stages such as unfolding, memoisation, formula discovery, hierarchical shared-subgoal splicing, deterministic loop conversion, safety classification, reporter, and a JavaScript plop.html web version.  ￼
 
+Progress update (2026-05-30): ~92% complete.
+Outstanding items: full declaration-driven gating coverage and broader end-to-end runtime validation in this environment.
+
 PR: Plop ND→D Loop-Splice Class System
 Goal:
 Add a full nondeterminism-to-determinism classifier that decides whether Prolog choicepoint code can be converted 1:1 into deterministic loops, maps, folds, flatmaps, spliced outputs, or memoised dependent loops without changing meaning.
