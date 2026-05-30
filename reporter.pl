@@ -50,5 +50,41 @@ report_item_line(left_in_loop_count(Count), Line) :-
 report_item_line(skipped(Pred, Reason), Line) :-
     !,
     format(atom(Line), 'skipped: ~w (~w)', [Pred, Reason]).
+report_item_line(nd_classified(Pred, Class, _Reasons), Line) :-
+    !,
+    format(atom(Line), 'nd_classified: ~w => ~w', [Pred, Class]).
+report_item_line(nd_map_converted(Pred), Line) :-
+    !,
+    format(atom(Line), 'nd_map_converted: ~w', [Pred]).
+report_item_line(nd_fold_converted(Pred), Line) :-
+    !,
+    format(atom(Line), 'nd_fold_converted: ~w', [Pred]).
+report_item_line(nd_flatmap_converted(Pred), Line) :-
+    !,
+    format(atom(Line), 'nd_flatmap_converted: ~w', [Pred]).
+report_item_line(nd_splice_converted(Pred), Line) :-
+    !,
+    format(atom(Line), 'nd_splice_converted: ~w', [Pred]).
+report_item_line(mnn_signature_matched(Pred, Sig), Line) :-
+    !,
+    format(atom(Line), 'mnn_signature_matched: ~w => ~w', [Pred, Sig]).
+report_item_line(mnn_signature_unknown(Pred), Line) :-
+    !,
+    format(atom(Line), 'mnn_signature_unknown: ~w', [Pred]).
+report_item_line(skipped_nd_conversion(Pred, Reason), Line) :-
+    !,
+    format(atom(Line), 'skipped_nd_conversion: ~w (~w)', [Pred, Reason]).
+report_item_line(unsafe_nd_conversion(Pred, Reasons), Line) :-
+    !,
+    format(atom(Line), 'unsafe_nd_conversion: ~w (~w)', [Pred, Reasons]).
+report_item_line(expensive_hoisted(Pred), Line) :-
+    !,
+    format(atom(Line), 'expensive_hoisted: ~w', [Pred]).
+report_item_line(expensive_memoised(Pred), Line) :-
+    !,
+    format(atom(Line), 'expensive_memoised: ~w', [Pred]).
+report_item_line(expensive_unknown(Pred), Line) :-
+    !,
+    format(atom(Line), 'expensive_unknown: ~w', [Pred]).
 report_item_line(Item, Line) :-
     format(atom(Line), '~w', [Item]).

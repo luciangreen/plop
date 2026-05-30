@@ -7,8 +7,45 @@
 ]).
 
 :- use_module(safety, [has_side_effects/1, has_cut/1, classify_goal_safety/2]).
+:- use_module(mnn_signature, [mnn_signature/2, mnn_lookup_class/2]).
 
 :- dynamic nd_decl/2.
+
+% -----------------------------------------------------------------------
+% Declaration directive handlers.
+% The following term_expansion clauses let users write:
+%   :- pure myPred/2.
+%   :- expensive myPred/2.
+%   :- memo_safe myPred/2.
+%   :- no_hoist myPred/2.
+%   :- no_loop_convert myPred/2.
+%   :- output_template myPred/2.
+%   :- enumerator myPred/2.
+%   :- deterministic myPred/2.
+%   :- nondet myPred/2.
+%   :- mnn_signature myPred/2, Signature.
+% These are translated to nd_decl/2 facts at load time.
+% -----------------------------------------------------------------------
+nd_decl_keyword(pure).
+nd_decl_keyword(deterministic).
+nd_decl_keyword(nondet).
+nd_decl_keyword(expensive).
+nd_decl_keyword(memo_safe).
+nd_decl_keyword(no_hoist).
+nd_decl_keyword(no_loop_convert).
+nd_decl_keyword(output_template).
+nd_decl_keyword(enumerator).
+
+user:term_expansion((:- Decl), []) :-
+    compound(Decl),
+    Decl =.. [Keyword, Pred],
+    nd_decl_keyword(Keyword),
+    !,
+    assertz(nd_decl(Pred, Keyword)).
+
+user:term_expansion((:- mnn_signature(Pred, Sig)), []) :-
+    !,
+    assertz(nd_decl(Pred, mnn_signature(Sig))).
 
 declare_nd(Pred, Decl) :-
     retractall(nd_decl(Pred, Decl)),
@@ -22,9 +59,25 @@ nd_classify_program(ProgramIR, ClassifiedIR, Report) :-
             member(Predicate, Predicates),
             nd_classify_predicate(Predicate, ProgramIR, Class, Reasons)
         ),
-        Report
+        ClassifyReport
     ),
-    annotate_program(ProgramIR, Report, ClassifiedIR).
+    mnn_signature_report(Predicates, ProgramIR, MNNReport),
+    append(ClassifyReport, MNNReport, Report),
+    annotate_program(ProgramIR, ClassifyReport, ClassifiedIR).
+
+mnn_signature_report([], _, []).
+mnn_signature_report([Pred | Rest], ProgramIR, [Item | RestItems]) :-
+    clauses_for_predicate(Pred, ProgramIR, Clauses),
+    (   Clauses == []
+    ->  Item = mnn_signature_unknown(Pred)
+    ;   Clauses = [Clause | _],
+        mnn_signature(Clause, Sig),
+        (   mnn_lookup_class(Sig, _Class)
+        ->  Item = mnn_signature_matched(Pred, Sig)
+        ;   Item = mnn_signature_unknown(Pred)
+        )
+    ),
+    mnn_signature_report(Rest, ProgramIR, RestItems).
 
 annotate_program([], _, []).
 annotate_program([ir_clause(Id, Head, Body, Meta) | Rest], Report, [ir_clause(Id, Head, Body, [nd_class(Class) | Meta]) | AnnotatedRest]) :-
@@ -65,6 +118,12 @@ classify_clauses(Clauses, ProgramIR, Class, Reasons) :-
     ;   clauses_match_map_pattern(Clauses)
     ->  Class = map_compatible,
         Reasons = [findall_member_template]
+    ;   clauses_have_memo_safe_expensive(Clauses)
+    ->  Class = memo_safe_expensive_dependency,
+        Reasons = [contains_memo_safe_expensive_subgoal]
+    ;   clauses_have_hoistable_expensive(Clauses)
+    ->  Class = hoistable_expensive_dependency,
+        Reasons = [contains_hoistable_expensive_subgoal]
     ;   clauses_have_enumerator_call(Clauses)
     ->  Class = enumerator,
         Reasons = [generates_multiple_solutions]
@@ -171,6 +230,10 @@ nd_body_class(Body, _Context, Class, DependencyGraph) :-
     ->  Class = filter_compatible
     ;   body_has_map_pattern(Body)
     ->  Class = map_compatible
+    ;   body_has_memo_safe_expensive(Body)
+    ->  Class = memo_safe_expensive_dependency
+    ;   body_has_hoistable_expensive(Body)
+    ->  Class = hoistable_expensive_dependency
     ;   body_has_enumerator(Body)
     ->  Class = enumerator
     ;   body_is_deterministic(Body)
@@ -207,6 +270,10 @@ class_decision(flatmap_compatible, _Reasons, yes(flatmap_compatible, transform_t
 class_decision(filter_compatible, _Reasons, yes(filter_compatible, transform_findall_to_filter_loop)) :- !.
 class_decision(splice_compatible, _Reasons, yes(splice_compatible, transform_to_spliced_template_loop)) :- !.
 class_decision(dependent_nested_loop, _Reasons, yes(dependent_nested_loop, transform_to_nested_dependent_loops)) :- !.
+class_decision(hoistable_expensive_dependency, _Reasons,
+               yes(hoistable_expensive_dependency, hoist_expensive_subgoals)) :- !.
+class_decision(memo_safe_expensive_dependency, _Reasons,
+               yes(memo_safe_expensive_dependency, memoise_expensive_subgoals)) :- !.
 class_decision(enumerator, _Reasons,
                unknown(enumerator_may_produce_multiple_answers,
                        [':- deterministic Pred/Arity.', ':- enumerator Pred/Arity.'])) :- !.
@@ -266,6 +333,38 @@ clauses_have_enumerator_call(Clauses) :-
     member(ir_clause(_, _, Body, _), Clauses),
     body_has_enumerator(Body),
     !.
+
+clauses_have_hoistable_expensive(Clauses) :-
+    member(ir_clause(_, _, Body, _), Clauses),
+    body_has_hoistable_expensive(Body),
+    !.
+
+clauses_have_memo_safe_expensive(Clauses) :-
+    member(ir_clause(_, _, Body, _), Clauses),
+    body_has_memo_safe_expensive(Body),
+    !.
+
+body_has_hoistable_expensive(Body) :-
+    member(Goal, Body),
+    is_expensive_heuristic(Goal),
+    \+ goal_contains_unsafe_construct(Goal),
+    \+ has_cut(Goal),
+    \+ has_side_effects(Goal),
+    !.
+
+body_has_memo_safe_expensive(Body) :-
+    member(Goal, Body),
+    callable(Goal),
+    functor(Goal, Name, Arity),
+    nd_decl(Name/Arity, memo_safe),
+    !.
+
+is_expensive_heuristic(Goal) :-
+    callable(Goal),
+    functor(Goal, Name, _),
+    member(Name, [expensive, costly, heavy, slow, compute,
+                  big_computation, matrix_multiply, solve, search,
+                  db_query, file_read, network_call]).
 
 body_has_map_pattern(Body) :-
     member(findall(_, Generator, _), Body),
