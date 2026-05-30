@@ -490,6 +490,14 @@
     <h2>Conversion Report</h2>
     <div id="loop-report" class="report-box empty-state">No report yet.</div>
   </div>
+  <div class="panel">
+    <h2>Safety Warnings</h2>
+    <div id="loop-warnings" class="report-box empty-state">No warnings.</div>
+  </div>
+  <div class="panel">
+    <h2>Conversion Explanation</h2>
+    <div id="loop-explanation" class="report-box empty-state">Run a conversion to see why it was accepted, rejected, or left unknown.</div>
+  </div>
 </div>
 
 <!-- ===== SPLICED OUTPUT TAB ===== -->
@@ -522,6 +530,14 @@
   <div class="panel">
     <h2>Splice Report</h2>
     <div id="splice-report" class="report-box empty-state">No report yet.</div>
+  </div>
+  <div class="panel">
+    <h2>Safety Warnings</h2>
+    <div id="splice-warnings" class="report-box empty-state">No warnings.</div>
+  </div>
+  <div class="panel">
+    <h2>Splice Explanation</h2>
+    <div id="splice-explanation" class="report-box empty-state">Run splicing to see why patterns were fused or kept separate.</div>
   </div>
 </div>
 
@@ -557,6 +573,14 @@
     <h2>Dependency Report</h2>
     <div id="expensive-report" class="report-box empty-state">No report yet.</div>
   </div>
+  <div class="panel">
+    <h2>Safety Warnings</h2>
+    <div id="expensive-warnings" class="report-box empty-state">No warnings.</div>
+  </div>
+  <div class="panel">
+    <h2>Analysis Explanation</h2>
+    <div id="expensive-explanation" class="report-box empty-state">Run analysis to see why subgoals were hoisted, memoised, or blocked.</div>
+  </div>
 </div>
 
 <!-- ===== MNN SIGNATURE INDEX TAB ===== -->
@@ -590,6 +614,14 @@
   <div class="panel">
     <h2>Transform Hints</h2>
     <div id="mnn-hints" class="report-box empty-state">No hints yet.</div>
+  </div>
+  <div class="panel">
+    <h2>Safety Warnings</h2>
+    <div id="mnn-warnings" class="report-box empty-state">No warnings.</div>
+  </div>
+  <div class="panel">
+    <h2>Index Explanation</h2>
+    <div id="mnn-explanation" class="report-box empty-state">Build the index to see which predicates matched known signatures and which fell back to structural classification.</div>
   </div>
 </div>
 
@@ -2596,6 +2628,26 @@ function runNDToLoop() {
     const detail = r.reason ? ` — ${escHtml(r.reason)}` : (r.class ? ` (${escHtml(r.class)})` : '');
     return `<div style="color:${col};margin:2px 0"><span style="font-family:monospace">${escHtml(r.type)}</span>: <code>${escHtml(head)}</code>${detail}</div>`;
   }).join('') || '<span class="empty-state">No conversions attempted.</span>';
+
+  const warnEl = document.getElementById('loop-warnings');
+  const unsafeItems = report.filter(r => r.type === 'unsafe_nd_conversion');
+  warnEl.className = 'report-box' + (unsafeItems.length ? '' : ' empty-state');
+  warnEl.innerHTML = unsafeItems.length
+    ? unsafeItems.map(r => {
+        const head = r.pred ? (r.pred.functor ? r.pred.functor + '/' + r.pred.args.length : String(r.pred)) : '?';
+        return `<div style="color:#c0392b;margin:2px 0">⚠ unsafe_nd_conversion: <code>${escHtml(head)}</code>${r.reason ? ' — ' + escHtml(r.reason) : ''}</div>`;
+      }).join('')
+    : '<span class="empty-state">No warnings.</span>';
+
+  const explEl = document.getElementById('loop-explanation');
+  explEl.className = 'report-box';
+  const skipped = report.filter(r => r.type === 'skipped_nd_conversion');
+  const converted = report.filter(r => ['nd_map_converted','nd_fold_converted','nd_flatmap_converted','nd_splice_converted'].includes(r.type));
+  let explanationLines = [];
+  if (converted.length) explanationLines.push(`${converted.length} predicate(s) converted to deterministic loops.`);
+  if (skipped.length) explanationLines.push(`${skipped.length} predicate(s) skipped (non-unsafe): ` + skipped.map(r => r.reason || '?').join(', ') + '.');
+  if (unsafeItems.length) explanationLines.push(`${unsafeItems.length} predicate(s) blocked due to unsafe nondeterminism.`);
+  explEl.textContent = explanationLines.join(' ') || 'No conversion activity.';
 }
 
 // ============================================================
@@ -2665,6 +2717,24 @@ function runLoopSplice() {
       return `<div style="color:#56ccf2;margin:2px 0">nd_splice_converted: <code>${escHtml(name)}</code> — ${s.count} findall templates detected, eligible for shared loop</div>`;
     }).join('');
   }
+
+  const warnEl = document.getElementById('splice-warnings');
+  // s.unsafe is set when detectSplicedTemplates finds a splice candidate whose
+  // enumerator contains a side-effectful or unsafe goal (e.g. cut, write, assert).
+  const unsafeSplice = spliced.filter(s => s.unsafe);
+  warnEl.className = 'report-box' + (unsafeSplice.length ? '' : ' empty-state');
+  warnEl.innerHTML = unsafeSplice.length
+    ? unsafeSplice.map(s => {
+        const name = s.pred ? (s.pred.functor ? s.pred.functor + '/' + s.pred.args.length : String(s.pred)) : '?';
+        return `<div style="color:#c0392b;margin:2px 0">⚠ unsafe splice skipped: <code>${escHtml(name)}</code></div>`;
+      }).join('')
+    : '<span class="empty-state">No warnings.</span>';
+
+  const explEl = document.getElementById('splice-explanation');
+  explEl.className = 'report-box';
+  explEl.textContent = spliced.length
+    ? `${spliced.length} predicate(s) detected with multiple findall calls sharing an enumerator. These can be fused into a single shared loop, reducing repeated enumeration.`
+    : 'No splice patterns detected. Each predicate uses at most one findall or uses distinct enumerators.';
 }
 
 // ============================================================
@@ -2771,6 +2841,26 @@ function runExpensiveDependency() {
                    d.hoistable ? 'expensive_hoisted' : 'expensive_memoised';
       return `<div style="color:#c8deff;margin:2px 0">${escHtml(type)}: <code>${escHtml(name)}</code> — ${escHtml(d.cls)}</div>`;
     }).join('');
+
+    const warnEl = document.getElementById('expensive-warnings');
+    const impure = deps.filter(d => d.cls === 'impure_expensive');
+    warnEl.className = 'report-box' + (impure.length ? '' : ' empty-state');
+    warnEl.innerHTML = impure.length
+      ? impure.map(d => {
+          const name = d.pred ? (d.pred.functor ? d.pred.functor + '/' + d.pred.args.length : String(d.pred)) : '?';
+          return `<div style="color:#c0392b;margin:2px 0">⚠ impure/unsafe expensive subgoal blocked from hoisting: <code>${escHtml(name)}</code></div>`;
+        }).join('')
+      : '<span class="empty-state">No warnings.</span>';
+
+    const explEl = document.getElementById('expensive-explanation');
+    explEl.className = 'report-box';
+    const hoisted = deps.filter(d => d.hoistable && d.cls !== 'impure_expensive');
+    const memoised = deps.filter(d => !d.hoistable && d.cls !== 'impure_expensive');
+    let parts = [];
+    if (hoisted.length) parts.push(`${hoisted.length} subgoal(s) can be hoisted outside the loop (pure deterministic).`);
+    if (memoised.length) parts.push(`${memoised.length} subgoal(s) are candidates for memoisation (unknown or recursive cost).`);
+    if (impure.length) parts.push(`${impure.length} subgoal(s) blocked — impure or unsafe, must not be hoisted.`);
+    explEl.textContent = parts.join(' ') || 'No expensive dependencies detected.';
   }
 }
 
@@ -2855,6 +2945,25 @@ function runMNNSignature() {
     return `<div style="margin:3px 0"><span style="color:${badge};font-family:monospace">${escHtml(name)}</span> — <span style="color:#c8deff">${escHtml(hint)}</span>` +
            `<br><span style="color:#4a6080;font-size:0.78rem">mnn_signature_matched: ${escHtml(cls)}</span></div>`;
   }).join('') || '<span class="empty-state">No signatures built.</span>';
+
+  const warnEl = document.getElementById('mnn-warnings');
+  const blocked = index.filter(e => e.cls === 'unsafe_nondeterminism' || e.cls === 'requires_interpreter_construct');
+  warnEl.className = 'report-box' + (blocked.length ? '' : ' empty-state');
+  warnEl.innerHTML = blocked.length
+    ? blocked.map(e => {
+        return `<div style="color:#c0392b;margin:2px 0">⚠ mnn_signature_unknown (blocked): <code>${escHtml(e.name)}</code> — ${escHtml(e.cls)}</div>`;
+      }).join('')
+    : '<span class="empty-state">No warnings.</span>';
+
+  const explEl = document.getElementById('mnn-explanation');
+  explEl.className = 'report-box';
+  const matched = index.filter(e => e.cls !== 'unknown_cost_dependency');
+  const unknown = index.filter(e => e.cls === 'unknown_cost_dependency');
+  let parts = [];
+  if (matched.length) parts.push(`${matched.length} predicate(s) matched a known MNN signature (O(1) classification).`);
+  if (unknown.length) parts.push(`${unknown.length} predicate(s) fell back to structural ND classification (signature unknown).`);
+  if (blocked.length) parts.push(`${blocked.length} predicate(s) emitted mnn_signature_unknown due to unsafe/meta-call patterns.`);
+  explEl.textContent = parts.join(' ') || 'No index entries generated.';
 }
 </script>
 </body>
