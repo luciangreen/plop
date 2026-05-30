@@ -209,10 +209,10 @@ class_decision(splice_compatible, _Reasons, yes(splice_compatible, transform_to_
 class_decision(dependent_nested_loop, _Reasons, yes(dependent_nested_loop, transform_to_nested_dependent_loops)) :- !.
 class_decision(enumerator, _Reasons,
                unknown(enumerator_may_produce_multiple_answers,
-                       [':- deterministic Predicate/Arity.', ':- enumerator Predicate/Arity.'])) :- !.
+                       [':- deterministic Pred/Arity.', ':- enumerator Pred/Arity.'])) :- !.
 class_decision(unknown_cost_dependency, _Reasons,
                unknown(unknown_cost_dependency,
-                       [':- expensive Predicate/Arity.', ':- memo_safe Predicate/Arity.'])) :- !.
+                       [':- expensive Pred/Arity.', ':- memo_safe Pred/Arity.'])) :- !.
 class_decision(_Class, _Reasons, unknown(classification_incomplete, [])).
 
 all_predicates(ProgramIR, Predicates) :-
@@ -381,7 +381,7 @@ is_condition_goal(Goal) :-
     callable(Goal),
     functor(Goal, Name, Arity),
     (   Arity =:= 1,
-        atom_chars(Name, ['\\', '+'])
+        Name == '\\+'
     ;   Arity =:= 2,
         member(Name, ['>', '<', '>=', '=<', '=:=', '=\\=', '==', '\\=='])
     ).
