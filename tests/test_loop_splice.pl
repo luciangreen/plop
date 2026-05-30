@@ -141,4 +141,13 @@ test(cut_generator_not_converted) :-
     assertion(LoopClause = Clause),
     assertion(Report = []).
 
+% --- unsafe predicate report ---
+test(nd_to_loop_predicate_reports_unsafe_conversion) :-
+    ProgramIR = [
+        ir_clause(c1, print_first([H|_]), [writeln(H)], [])
+    ],
+    nd_to_loop_predicate(print_first/1, ProgramIR, OptimisedIR, Report),
+    assertion(OptimisedIR = ProgramIR),
+    assertion(member(unsafe_nd_conversion(print_first/1, _), Report)).
+
 :- end_tests(loop_splice).

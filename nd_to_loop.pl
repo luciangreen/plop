@@ -21,6 +21,9 @@ nd_to_loop_predicate(Predicate, ProgramIR, OptimisedIR, Report) :-
     can_convert_1_to_1(Predicate, ProgramIR, Decision),
     (   Decision = yes(_, _)
     ->  nd_to_loop_program(ProgramIR, OptimisedIR, Report)
+    ;   Decision = no(unsafe_nd(Reasons))
+    ->  OptimisedIR = ProgramIR,
+        Report = [unsafe_nd_conversion(Predicate, Reasons)]
     ;   Decision = no(Reason)
     ->  OptimisedIR = ProgramIR,
         Report = [skipped_nd_conversion(Predicate, Reason)]

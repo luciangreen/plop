@@ -2822,8 +2822,10 @@ function buildMNNSignatureIndex(ir) {
   for (const clause of ir) {
     const cls = classifyBody(clause.body || []);
     const name = clause.head ? (clause.head.functor ? clause.head.functor + '/' + clause.head.args.length : String(clause.head)) : '?';
+    const known = Object.prototype.hasOwnProperty.call(MNN_KNOWN_SIGNATURES, cls);
     const sig = MNN_KNOWN_SIGNATURES[cls] || { hint: 'unknown — fall back to structural analysis', badge: '#888' };
-    index.push({ name, cls, hint: sig.hint, badge: sig.badge });
+    const reportType = known ? 'mnn_signature_matched' : 'mnn_signature_unknown';
+    index.push({ name, cls, hint: sig.hint, badge: sig.badge, reportType });
   }
   return index;
 }
@@ -2851,9 +2853,9 @@ function runMNNSignature() {
   outEl.innerHTML = html;
 
   hintEl.className = 'report-box';
-  hintEl.innerHTML = index.map(({ name, cls, hint, badge }) => {
+  hintEl.innerHTML = index.map(({ name, cls, hint, badge, reportType }) => {
     return `<div style="margin:3px 0"><span style="color:${badge};font-family:monospace">${escHtml(name)}</span> — <span style="color:#c8deff">${escHtml(hint)}</span>` +
-           `<br><span style="color:#4a6080;font-size:0.78rem">mnn_signature_matched: ${escHtml(cls)}</span></div>`;
+           `<br><span style="color:#4a6080;font-size:0.78rem">${escHtml(reportType)}: ${escHtml(cls)}</span></div>`;
   }).join('') || '<span class="empty-state">No signatures built.</span>';
 }
 </script>
