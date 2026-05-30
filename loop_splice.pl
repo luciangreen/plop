@@ -125,7 +125,6 @@ build_splice(Head, Id, List, Entries, SpliceCall, Reverses, [BaseClause, StepCla
     maplist(fresh_final_out, Indices, FinalOuts),
     flatten([List, AccIns, FinalOuts], BaseArgList),
     BaseHead =.. [SpliceName | BaseArgList],
-    BaseBody_pairs = AccIns,
     base_body_goals(AccIns, FinalOuts, BaseEqs),
     flatten([[X|List_t], AccIns, FinalOuts], StepArgList),
     StepHead =.. [SpliceName | StepArgList],
@@ -136,8 +135,7 @@ build_splice(Head, Id, List, Entries, SpliceCall, Reverses, [BaseClause, StepCla
     StepClause = ir_clause(step(SpliceName), StepHead, StepBody, []),
     flatten([List, replicate(N, []), FinalOuts], CallArgs),
     SpliceCall =.. [SpliceName | CallArgs],
-    maplist(build_reverse, Entries, FinalOuts, Reverses),
-    ignore(BaseBody_pairs = BaseBody_pairs).  % suppress singleton warning
+    maplist(build_reverse, Entries, FinalOuts, Reverses).
 
 fresh_acc_in(I, Acc) :- term_to_atom(acc_in(I), A), term_to_atom(Acc, A).
 fresh_acc_out(I, Acc) :- term_to_atom(acc_out(I), A), term_to_atom(Acc, A).

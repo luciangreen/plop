@@ -60,25 +60,7 @@ detect_repeated_expensive_subgoals(Body, Repeated) :-
     detect_expensive_subgoals(Body, Expensive),
     find_repeats(Expensive, Repeated).
 
-find_repeats([], []).
-find_repeats([Goal | Rest], Repeated) :-
-    (   member(Other, Rest), Other =@= Goal
-    ->  (   member(Goal, Repeated)
-        ->  Repeated1 = Repeated
-        ;   Repeated1 = [Goal | _]
-        ),
-        find_repeats(Rest, Repeated2),
-        (   var(Repeated1)
-        ->  Repeated = [Goal | Repeated2]
-        ;   Repeated = Repeated2
-        )
-    ;   find_repeats(Rest, Repeated)
-    ).
-find_repeats([_Goal | Rest], Repeated) :-
-    find_repeats(Rest, Repeated).
-
-% Simpler approach: group by functor+args-as-term
-find_repeats_correct(Goals, Repeated) :-
+find_repeats(Goals, Repeated) :-
     findall(G, (
         member(G, Goals),
         include(=@=(G), Goals, Matches),
@@ -139,7 +121,6 @@ maybe_memoise_goal(Goal, NewGoal, Report) :-
         functor(Goal, Name, Arity),
         nd_decl(Name/Arity, memo_safe)
     ->  wrap_with_memoise(Goal, NewGoal),
-        NewGoal = Goal,  % simplified: we just record it
         Report = [expensive_memoised(Name/Arity)]
     ;   is_expensive_goal(Goal),
         callable(Goal),
@@ -151,7 +132,7 @@ maybe_memoise_goal(Goal, NewGoal, Report) :-
         Report = []
     ).
 
-wrap_with_memoise(Goal, Goal).  % conceptual wrapper; in practice uses nb_getval cache
+wrap_with_memoise(Goal, memo_call(Goal)).  % wrap expensive goal in memoised call
 
 %% classify_expensive_dependency(+Goal, +ProgramIR, -Class) is det.
 %

@@ -339,8 +339,8 @@ clauses_match_splice_pattern(Clauses, _ProgramIR) :-
         first_generator_call(Gen, FA)
     ), FAs),
     FAs = [FA | _],
-    include(==(FA), FAs, FAs),
-    length(FAs, Len),
+    include(==(FA), FAs, MatchingFAs),
+    length(MatchingFAs, Len),
     Len > 1,
     !.
 

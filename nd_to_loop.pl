@@ -164,7 +164,7 @@ convert_flatmap_to_nested_loop(Clause, LoopClause, Report) :-
         InnerStep_Clause = ir_clause(step(InnerName), InnerStep_H,
                                [ITr2, InnerRec], []),
         OuterCall   =.. [OuterName, Xs, [], Rev],
-        ignore(IZ2 = IZ),  % ensure binding
+        IZ2 = IZ,
         true
     ->  replace_findall_in_body(Body,
             findall(Z,(member(X,Xs),ExpGoal,member(Y,A),TrGoal),Out),
@@ -362,9 +362,7 @@ splice_helper_name(Head, Id, Name) :-
 map_helper_name(HelperName, _Head, _Id, _Enum, List, Template, X, MapGoal, Out,
                 CallGoal, BaseClause, StepClause) :-
     copy_term(X-Template-MapGoal, HX-HT-HGoal),
-    Rev = _Rev,
-    CallGoal  =.. [HelperName, List, [], Rev],
-    ignore(Out = Rev),
+    CallGoal  =.. [HelperName, List, [], Out],
     BaseHead  =.. [HelperName, [], Acc, Acc],
     StepHead  =.. [HelperName, [HX|Xs], Acc0, Res],
     StepRec   =.. [HelperName, Xs, [HT|Acc0], Res],
