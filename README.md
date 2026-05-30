@@ -461,6 +461,76 @@ Classes
 | `unsafe_nondeterminism` | Contains side-effectful goals (`write`, `assert`, `retract`) or cut; do **not** transform |
 | `requires_interpreter_construct` | Uses `call/N` or meta-call; cannot inline |
 
+Feature examples (from `pr5.txt`)
+
+1) Map-compatible ND (`nd_map_converted`)
+
+```prolog
+collect(Xs, Ys) :-
+    findall(Y, (member(X, Xs), f(X, Y)), Ys).
+```
+
+2) Fold-compatible ND (`nd_fold_converted`)
+
+```prolog
+total(Xs, Total) :-
+    findall(V, (member(X, Xs), score(X, V)), Vs),
+    sum_list(Vs, Total).
+```
+
+3) Flatmap / dependent nested loop (`nd_flatmap_converted`)
+
+```prolog
+nested(Xs, Out) :-
+    findall(Z, (member(X, Xs), expensive(X, A), member(Y, A), transform(X, Y, Z)), Out).
+```
+
+4) Spliced output (`nd_splice_converted`)
+
+```prolog
+report(Xs, Pairs, Triples) :-
+    findall([X,A], (member(X,Xs), expensive(X,A)), Pairs),
+    findall([X,A,B], (member(X,Xs), expensive(X,A), other(A,B)), Triples).
+```
+
+5) Expensive dependency classification (`expensive_hoisted` / `expensive_memoised` / `expensive_unknown`)
+
+```prolog
+process(Data, Results) :-
+    expensive_config(Cfg),
+    findall(R, (member(X, Data), compute(Cfg, X, R)), Results).
+```
+
+6) MNN signature index (`mnn_signature_matched` / `mnn_signature_unknown`)
+
+```prolog
+collect(List, Words, Lengths) :-
+    findall(W, (member(W, List), atom(W)), Words),
+    findall(L, (member(E, List), atom_length(E, L)), Lengths).
+```
+
+7) Safety rejection (`unsafe_nd_conversion` / `skipped_nd_conversion`)
+
+```prolog
+process(List) :-
+    findall(X, (member(X, List), write(X), nl), _),
+    !.
+```
+
+8) Declarations used by classifier / conversion
+
+```prolog
+:- pure expensive/2.
+:- deterministic f/2.
+:- expensive expensive/2.
+:- memo_safe expensive/2.
+:- no_hoist side_effecting/2.
+:- no_loop_convert legacy_pred/3.
+:- output_template report/3.
+:- enumerator member/2.
+:- mnn_signature report/3, sig_repeated_expensive_template.
+```
+
 Running the Classifier
 
 ```prolog
@@ -512,6 +582,16 @@ A O(1) pattern-signature index (`mnn_signature.pl`) lets the pipeline classify a
 Safety Note
 
 The ND→D system **never** transforms a predicate classified as `unsafe_nondeterminism` or `requires_interpreter_construct` unless experimental mode is enabled via `set_experimental_mode(true)`. All other classes are converted conservatively, preserving answer order and duplicates.
+
+JavaScript web demo (`plop.html`)
+
+- **ND→D Classifier** (`runNDClassifier` / `classifyNDProgram`)
+- **Loop Conversion** (`runNDToLoop` / `convertNDToLoop`)
+- **Spliced Output** (`runLoopSplice` / `detectSplicedTemplates`)
+- **Expensive Dependency** (`runExpensiveDependency` / `detectExpensiveDependencies`)
+- **MNN Signature Index** (`runMNNSignature` / `buildMNNSignatureIndex`)
+
+Each tab includes input text area, examples, run button, output/report, safety warnings, and an explanation panel.
 
 ⸻
 

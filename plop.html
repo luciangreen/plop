@@ -455,6 +455,10 @@
     <h2>Safety Warnings</h2>
     <div id="nd-warnings" class="report-box empty-state">No warnings.</div>
   </div>
+  <div class="panel">
+    <h2>Classification Explanation</h2>
+    <div id="nd-explanation" class="report-box empty-state">Run classification to see why predicates were accepted, rejected, or unknown for ND→D conversion.</div>
+  </div>
 </div>
 
 <!-- ===== LOOP CONVERSION TAB ===== -->
@@ -2430,6 +2434,8 @@ function clearND() {
   document.getElementById('nd-output').innerHTML = '<p class="empty-state">Result will appear here…</p>';
   document.getElementById('nd-warnings').innerHTML = '<span class="empty-state">No warnings.</span>';
   document.getElementById('nd-warnings').className = 'report-box empty-state';
+  document.getElementById('nd-explanation').textContent = 'Run classification to see why predicates were accepted, rejected, or unknown for ND→D conversion.';
+  document.getElementById('nd-explanation').className = 'report-box empty-state';
 }
 
 /** Classify ND goals in a body (JS heuristic approximation of nd_classify.pl) */
@@ -2437,39 +2443,73 @@ function classifyNDProgram(ir) {
   const results = [];
   for (const clause of ir) {
     const { head, body } = clause;
-    const name = head && head.functor ? head.functor + '/' + head.args.length : String(head);
+    const name = getFunctor(head) || String(head);
     const cls = classifyBody(body || []);
     results.push({ name, cls, body: body || [] });
   }
   return results;
 }
 
+function termGoalName(term) {
+  if (!term) return '';
+  if (term.t === 'c') return term.f;
+  if (term.t === 'a') return term.n;
+  if (term.functor) return term.functor;
+  return '';
+}
+
+function collectGoalNames(term, out = []) {
+  if (!term) return out;
+  const name = termGoalName(term);
+  if (name) out.push(name);
+  if (term.t === 'c' && Array.isArray(term.a)) {
+    for (const arg of term.a) collectGoalNames(arg, out);
+  } else if (term.args && Array.isArray(term.args)) {
+    for (const arg of term.args) collectGoalNames(arg, out);
+  }
+  return out;
+}
+
+function hasUnsafeConstruct(term) {
+  const names = collectGoalNames(term, []);
+  return names.some(n => ['!','write','writeln','nl','read','assert','asserta','assertz','retract','retractall','random'].includes(n));
+}
+
 function classifyBody(goals) {
   if (!goals || goals.length === 0) return 'deterministic';
-  const goalNames = goals.map(g => goalFunctor(g));
-  if (goalNames.some(n => n === 'write' || n === 'writeln' || n === 'nl' || n === 'read' || n === 'assert' || n === 'retract')) return 'unsafe_nondeterminism';
-  if (goalNames.some(n => n === '!')) return 'unsafe_nondeterminism';
+  const goalNames = goals.flatMap(g => collectGoalNames(g, []));
+  if (goalNames.some(n => n === 'write' || n === 'writeln' || n === 'nl' || n === 'read' || n === 'assert' || n === 'retract' || n === '!')) return 'unsafe_nondeterminism';
   if (goalNames.some(n => n === 'call')) return 'requires_interpreter_construct';
   const hasFA = goalNames.some(n => n === 'findall' || n === 'bagof' || n === 'setof');
   const hasMember = goalNames.some(n => n === 'member');
   if (!hasFA && !hasMember) return 'deterministic';
+  const topFindalls = goals.filter(g => {
+    const f = termGoalName(g);
+    return f === 'findall' || f === 'bagof' || f === 'setof';
+  }).length;
   if (hasFA && !hasMember) {
     const accum = goalNames.some(n => n === 'is' || n === '+' || n === '-' || n === '*');
     if (accum) return 'fold_compatible';
     return 'map_compatible';
   }
   if (hasMember && !hasFA) return 'enumerator';
-  // findall + member → check for nesting
-  const nestedFindall = goals.filter(g => goalFunctor(g) === 'findall').length > 1;
-  if (nestedFindall) return 'splice_compatible';
+  if (topFindalls > 1) return 'splice_compatible';
+  const nestedMembers = goalNames.filter(n => n === 'member').length > 1;
+  if (nestedMembers) return 'flatmap_compatible';
   return 'flatmap_compatible';
 }
 
 function goalFunctor(g) {
   if (!g) return '';
+  if (g.t === 'c') return g.f;
+  if (g.t === 'a') return g.n;
   if (typeof g === 'string') return g;
   if (g.functor) return g.functor;
   return '';
+}
+
+function predicateLabel(head) {
+  return getFunctor(head) || String(head);
 }
 
 function ndClassColor(cls) {
@@ -2527,6 +2567,16 @@ function runNDClassifier() {
     warnEl.className = 'report-box empty-state';
     warnEl.innerHTML = '<span class="empty-state">No unsafe predicates detected.</span>';
   }
+
+  const explEl = document.getElementById('nd-explanation');
+  explEl.className = 'report-box';
+  const safe = classified.filter(r => r.cls !== 'unsafe_nondeterminism' && r.cls !== 'requires_interpreter_construct');
+  const meta = classified.filter(r => r.cls === 'requires_interpreter_construct');
+  let lines = [];
+  if (safe.length) lines.push(`${safe.length} predicate(s) classified as convertible or analysable ND patterns.`);
+  if (warnings.length) lines.push(`${warnings.length} predicate(s) blocked for safety-sensitive nondeterminism.`);
+  if (meta.length) lines.push(`${meta.length} predicate(s) require interpreter/meta-call constructs and were not converted.`);
+  explEl.textContent = lines.join(' ') || 'No predicates classified.';
 }
 
 // ============================================================
@@ -2569,6 +2619,10 @@ function clearLoop() {
   document.getElementById('loop-output').className = 'empty-state';
   document.getElementById('loop-report').innerHTML = '<span class="empty-state">No report yet.</span>';
   document.getElementById('loop-report').className = 'report-box empty-state';
+  document.getElementById('loop-warnings').innerHTML = '<span class="empty-state">No warnings.</span>';
+  document.getElementById('loop-warnings').className = 'report-box empty-state';
+  document.getElementById('loop-explanation').textContent = 'Run a conversion to see why it was accepted, rejected, or left unknown.';
+  document.getElementById('loop-explanation').className = 'report-box empty-state';
 }
 
 /** Approximate nd_to_loop_program in JS */
@@ -2577,7 +2631,10 @@ function convertNDToLoop(ir) {
   const out = [];
   for (const clause of ir) {
     const cls = classifyBody(clause.body || []);
-    if (cls === 'unsafe_nondeterminism' || cls === 'requires_interpreter_construct') {
+    if (cls === 'unsafe_nondeterminism') {
+      out.push(clause);
+      report.push({ type: 'unsafe_nd_conversion', pred: clause.head, reason: cls });
+    } else if (cls === 'requires_interpreter_construct') {
       out.push(clause);
       report.push({ type: 'skipped_nd_conversion', pred: clause.head, reason: cls });
     } else if (cls === 'map_compatible') {
@@ -2624,7 +2681,7 @@ function runNDToLoop() {
   repEl.className = 'report-box';
   repEl.innerHTML = report.map(r => {
     const col = loopReportColor(r.type);
-    const head = r.pred ? (r.pred.functor ? r.pred.functor + '/' + r.pred.args.length : String(r.pred)) : '?';
+    const head = r.pred ? predicateLabel(r.pred) : '?';
     const detail = r.reason ? ` — ${escHtml(r.reason)}` : (r.class ? ` (${escHtml(r.class)})` : '');
     return `<div style="color:${col};margin:2px 0"><span style="font-family:monospace">${escHtml(r.type)}</span>: <code>${escHtml(head)}</code>${detail}</div>`;
   }).join('') || '<span class="empty-state">No conversions attempted.</span>';
@@ -2634,7 +2691,7 @@ function runNDToLoop() {
   warnEl.className = 'report-box' + (unsafeItems.length ? '' : ' empty-state');
   warnEl.innerHTML = unsafeItems.length
     ? unsafeItems.map(r => {
-        const head = r.pred ? (r.pred.functor ? r.pred.functor + '/' + r.pred.args.length : String(r.pred)) : '?';
+        const head = r.pred ? predicateLabel(r.pred) : '?';
         return `<div style="color:#c0392b;margin:2px 0">⚠ unsafe_nd_conversion: <code>${escHtml(head)}</code>${r.reason ? ' — ' + escHtml(r.reason) : ''}</div>`;
       }).join('')
     : '<span class="empty-state">No warnings.</span>';
@@ -2642,10 +2699,10 @@ function runNDToLoop() {
   const explEl = document.getElementById('loop-explanation');
   explEl.className = 'report-box';
   const skipped = report.filter(r => r.type === 'skipped_nd_conversion');
-  const converted = report.filter(r => ['nd_map_converted','nd_fold_converted','nd_flatmap_converted','nd_splice_converted'].includes(r.type));
+  const convertedItems = report.filter(r => ['nd_map_converted','nd_fold_converted','nd_flatmap_converted','nd_splice_converted'].includes(r.type));
   let explanationLines = [];
-  if (converted.length) explanationLines.push(`${converted.length} predicate(s) converted to deterministic loops.`);
-  if (skipped.length) explanationLines.push(`${skipped.length} predicate(s) skipped (non-unsafe): ` + skipped.map(r => r.reason || '?').join(', ') + '.');
+  if (convertedItems.length) explanationLines.push(`${convertedItems.length} predicate(s) converted to deterministic loops.`);
+  if (skipped.length) explanationLines.push(`${skipped.length} predicate(s) skipped: ` + skipped.map(r => r.reason || '?').join(', ') + '.');
   if (unsafeItems.length) explanationLines.push(`${unsafeItems.length} predicate(s) blocked due to unsafe nondeterminism.`);
   explEl.textContent = explanationLines.join(' ') || 'No conversion activity.';
 }
@@ -2676,18 +2733,53 @@ function clearSplice() {
   document.getElementById('splice-output').className = 'empty-state';
   document.getElementById('splice-report').innerHTML = '<span class="empty-state">No report yet.</span>';
   document.getElementById('splice-report').className = 'report-box empty-state';
+  document.getElementById('splice-warnings').innerHTML = '<span class="empty-state">No warnings.</span>';
+  document.getElementById('splice-warnings').className = 'report-box empty-state';
+  document.getElementById('splice-explanation').textContent = 'Run splicing to see why patterns were fused or kept separate.';
+  document.getElementById('splice-explanation').className = 'report-box empty-state';
 }
 
 /** Detect multiple findalls over the same list variable (JS approximation of loop_splice.pl) */
 function detectSplicedTemplates(ir) {
   const results = [];
+  const termKey = (t) => {
+    try { return termStr(t, new Map(), 999); }
+    catch (_) { return JSON.stringify(t); }
+  };
+  const collectMemberListTerms = (term, out = []) => {
+    if (!term) return out;
+    if (term.t === 'c' && term.f === 'member' && Array.isArray(term.a) && term.a.length >= 2) out.push(term.a[1]);
+    if (term.t === 'c' && Array.isArray(term.a)) {
+      for (const arg of term.a) collectMemberListTerms(arg, out);
+    }
+    return out;
+  };
   for (const clause of ir) {
     const body = clause.body || [];
-    const findalls = body.filter(g => goalFunctor(g) === 'findall');
+    const findalls = body
+      .filter(g => goalFunctor(g) === 'findall')
+      .map(g => {
+        const args = g.a || g.args || [];
+        const generator = args[1] || null;
+        const enumTerms = collectMemberListTerms(generator, []);
+        return {
+          goal: g,
+          unsafe: hasUnsafeConstruct(generator),
+          enumKeys: enumTerms.map(termKey)
+        };
+      });
     if (findalls.length > 1) {
-      // Check if they share the same list variable (3rd arg)
-      const lists = findalls.map(g => g.args && g.args[2] ? g.args[2] : null);
-      results.push({ pred: clause.head, count: findalls.length, lists });
+      const enumFrequency = new Map();
+      for (const f of findalls) {
+        for (const key of f.enumKeys) enumFrequency.set(key, (enumFrequency.get(key) || 0) + 1);
+      }
+      const sharedEnumerators = [...enumFrequency.entries()].filter(([, count]) => count > 1).map(([key]) => key);
+      results.push({
+        pred: clause.head,
+        count: findalls.length,
+        unsafe: findalls.some(f => f.unsafe),
+        sharedEnumerators
+      });
     }
   }
   return results;
@@ -2713,8 +2805,14 @@ function runLoopSplice() {
     repEl.innerHTML = '<span class="empty-state">No splice opportunities found.</span>';
   } else {
     repEl.innerHTML = spliced.map(s => {
-      const name = s.pred ? (s.pred.functor ? s.pred.functor + '/' + s.pred.args.length : String(s.pred)) : '?';
-      return `<div style="color:#56ccf2;margin:2px 0">nd_splice_converted: <code>${escHtml(name)}</code> — ${s.count} findall templates detected, eligible for shared loop</div>`;
+      const name = s.pred ? predicateLabel(s.pred) : '?';
+      if (s.unsafe) {
+        return `<div style="color:#eb5757;margin:2px 0">unsafe_nd_conversion: <code>${escHtml(name)}</code> — splice blocked due to unsafe generator goals</div>`;
+      }
+      if (!s.sharedEnumerators || s.sharedEnumerators.length === 0) {
+        return `<div style="color:#f2c94c;margin:2px 0">skipped_nd_conversion: <code>${escHtml(name)}</code> — findall templates do not share the same enumerator</div>`;
+      }
+      return `<div style="color:#56ccf2;margin:2px 0">nd_splice_converted: <code>${escHtml(name)}</code> — ${s.count} findall templates share ${s.sharedEnumerators.length} enumerator(s), eligible for a shared loop</div>`;
     }).join('');
   }
 
@@ -2725,7 +2823,7 @@ function runLoopSplice() {
   warnEl.className = 'report-box' + (unsafeSplice.length ? '' : ' empty-state');
   warnEl.innerHTML = unsafeSplice.length
     ? unsafeSplice.map(s => {
-        const name = s.pred ? (s.pred.functor ? s.pred.functor + '/' + s.pred.args.length : String(s.pred)) : '?';
+        const name = s.pred ? predicateLabel(s.pred) : '?';
         return `<div style="color:#c0392b;margin:2px 0">⚠ unsafe splice skipped: <code>${escHtml(name)}</code></div>`;
       }).join('')
     : '<span class="empty-state">No warnings.</span>';
@@ -2764,6 +2862,10 @@ function clearExpensive() {
   document.getElementById('expensive-output').innerHTML = '<p class="empty-state">Result will appear here…</p>';
   document.getElementById('expensive-report').innerHTML = '<span class="empty-state">No report yet.</span>';
   document.getElementById('expensive-report').className = 'report-box empty-state';
+  document.getElementById('expensive-warnings').innerHTML = '<span class="empty-state">No warnings.</span>';
+  document.getElementById('expensive-warnings').className = 'report-box empty-state';
+  document.getElementById('expensive-explanation').textContent = 'Run analysis to see why subgoals were hoisted, memoised, or blocked.';
+  document.getElementById('expensive-explanation').className = 'report-box empty-state';
 }
 
 const EXPENSIVE_BUILTINS = new Set(['msort','sort','length','append','last','nth','nth0','nth1',
@@ -2822,7 +2924,7 @@ function runExpensiveDependency() {
     let html = '<table style="width:100%;border-collapse:collapse;font-size:0.85rem">';
     html += '<thead><tr><th style="text-align:left;padding:4px 8px;color:#6a8aaa">Predicate</th><th style="text-align:left;padding:4px 8px;color:#6a8aaa">Subgoal</th><th style="text-align:left;padding:4px 8px;color:#6a8aaa">Class</th><th style="text-align:left;padding:4px 8px;color:#6a8aaa">Action</th></tr></thead><tbody>';
     for (const d of deps) {
-      const name = d.pred ? (d.pred.functor ? d.pred.functor + '/' + d.pred.args.length : String(d.pred)) : '?';
+      const name = d.pred ? predicateLabel(d.pred) : '?';
       const gname = goalFunctor(d.goal) || '?';
       const action = d.cls === 'impure_expensive' ? 'must_not_hoist' :
                      d.cls === 'recursive_expensive' ? 'memo_safe_unknown' :
@@ -2836,7 +2938,7 @@ function runExpensiveDependency() {
     html += '</tbody></table>';
     outEl.innerHTML = html;
     repEl.innerHTML = deps.map(d => {
-      const name = d.pred ? (d.pred.functor ? d.pred.functor + '/' + d.pred.args.length : String(d.pred)) : '?';
+      const name = d.pred ? predicateLabel(d.pred) : '?';
       const type = d.cls === 'impure_expensive' ? 'expensive_unknown' :
                    d.hoistable ? 'expensive_hoisted' : 'expensive_memoised';
       return `<div style="color:#c8deff;margin:2px 0">${escHtml(type)}: <code>${escHtml(name)}</code> — ${escHtml(d.cls)}</div>`;
@@ -2847,7 +2949,7 @@ function runExpensiveDependency() {
     warnEl.className = 'report-box' + (impure.length ? '' : ' empty-state');
     warnEl.innerHTML = impure.length
       ? impure.map(d => {
-          const name = d.pred ? (d.pred.functor ? d.pred.functor + '/' + d.pred.args.length : String(d.pred)) : '?';
+          const name = d.pred ? predicateLabel(d.pred) : '?';
           return `<div style="color:#c0392b;margin:2px 0">⚠ impure/unsafe expensive subgoal blocked from hoisting: <code>${escHtml(name)}</code></div>`;
         }).join('')
       : '<span class="empty-state">No warnings.</span>';
@@ -2904,6 +3006,10 @@ function clearMNN() {
   document.getElementById('mnn-output').innerHTML = '<p class="empty-state">Result will appear here…</p>';
   document.getElementById('mnn-hints').innerHTML = '<span class="empty-state">No hints yet.</span>';
   document.getElementById('mnn-hints').className = 'report-box empty-state';
+  document.getElementById('mnn-warnings').innerHTML = '<span class="empty-state">No warnings.</span>';
+  document.getElementById('mnn-warnings').className = 'report-box empty-state';
+  document.getElementById('mnn-explanation').textContent = 'Build the index to see which predicates matched known signatures and which fell back to structural classification.';
+  document.getElementById('mnn-explanation').className = 'report-box empty-state';
 }
 
 /** Build O(1) signature index (JS approximation of mnn_signature.pl) */
@@ -2911,7 +3017,7 @@ function buildMNNSignatureIndex(ir) {
   const index = [];
   for (const clause of ir) {
     const cls = classifyBody(clause.body || []);
-    const name = clause.head ? (clause.head.functor ? clause.head.functor + '/' + clause.head.args.length : String(clause.head)) : '?';
+    const name = clause.head ? predicateLabel(clause.head) : '?';
     const sig = MNN_KNOWN_SIGNATURES[cls] || { hint: 'unknown — fall back to structural analysis', badge: '#888' };
     index.push({ name, cls, hint: sig.hint, badge: sig.badge });
   }
