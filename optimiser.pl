@@ -14,10 +14,6 @@
 :- use_module(recursive_index).
 :- use_module(splice).
 :- use_module(loop_conversion).
-:- use_module(nd_classify).
-:- use_module(loop_splice).
-:- use_module(nd_to_loop).
-:- use_module(loop_dependency_schedule).
 :- use_module(safety).
 :- use_module(grouped_subterms).
 
@@ -31,8 +27,7 @@ optimise_program(ProgramIR, OptimisedIR, optimisation_report(Items)) :-
     build_dependency_graph(UnfoldedIR, Graph, GraphItems),
     hoist_common_dependencies(UnfoldedIR, Graph, HoistedIR, HoistItems),
     hierarchical_splice_program(HoistedIR, SplicedHierarchyIR, HSpliceItems),
-    schedule_program_dependencies(SplicedHierarchyIR, ScheduledIR, ScheduleItems),
-    memoise_program(ScheduledIR, MemoisedIR, MemoItems),
+    memoise_program(SplicedHierarchyIR, MemoisedIR, MemoItems),
     simplify_program(MemoisedIR, SimplifiedIR, SimplifyItems),
     optimise_list_formulas(SimplifiedIR, ListFormulaIR, ListFormulaItems),
 optimise_indexicals(ListFormulaIR, IndexicalIR, IndexicalItems),
@@ -42,35 +37,27 @@ rewrite_grouped_subterms(IndexicalIR, GroupedIR, GroupedItems),
 optimise_recursive_index_loops(GroupedIR, RecursiveIndexIR, RecursiveIndexItems),
     splice_program(RecursiveIndexIR, SplicedIR, _SpliceItems),
     convert_deterministic_loops(SplicedIR, LoopIR, LoopItems),
-loop_splice_program(LoopIR, LoopSpliceIR, LoopSpliceItems),
-nd_to_loop_program(LoopSpliceIR, NDLoopIR, NDLoopItems),
-nd_classify_program(ProgramIR, _NDClassifiedIR, NDClassifyItems),
-analyse_enumerators(ProgramIR, NDLoopIR, EnumeratorItems),
+    analyse_enumerators(ProgramIR, LoopIR, EnumeratorItems),
     append(UnfoldItems, GraphItems, Items0),
     append(Items0, HoistItems, Items1),
     append(Items1, HSpliceItems, Items2),
-    append(Items2, ScheduleItems, Items3),
-    append(Items3, MemoItems, Items4),
-    append(Items4, SimplifyItems, Items5),
-    append(Items5, ListFormulaItems, Items6),
-    append(Items6, IndexicalItems, Items7),
-append(Items7, GroupedItems, Items8),
+    append(Items2, MemoItems, Items3),
+    append(Items3, SimplifyItems, Items4),
+    append(Items4, ListFormulaItems, Items5),
+    append(Items5, IndexicalItems, Items6),
+append(Items6, GroupedItems, Items7),
 
-append(Items8, RecursiveIndexItems, Items9),
-    append(Items9, LoopItems, Items10),
-    append(Items10, LoopSpliceItems, Items11),
-    append(Items11, NDLoopItems, Items12),
-    append(Items12, NDClassifyItems, Items13),
-    append(Items13, EnumeratorItems, Items14),
-    enforce_stage17_safety(ProgramIR, NDLoopIR, Items14, OptimisedIR, Items).
+append(Items7, RecursiveIndexItems, Items8),
+    append(Items8, LoopItems, Items9),
+    append(Items9, EnumeratorItems, Items10),
+    enforce_stage17_safety(ProgramIR, LoopIR, Items10, OptimisedIR, Items).
 
 optimise_predicate(PredicateNameArity, ProgramIR, OptimisedIR, optimisation_report(Items)) :-
     unfold_predicate(PredicateNameArity, ProgramIR, UnfoldedIR, UnfoldItems),
     build_dependency_graph(UnfoldedIR, Graph, GraphItems),
     hoist_common_dependencies(UnfoldedIR, Graph, HoistedIR, HoistItems),
     hierarchical_splice_program(HoistedIR, SplicedHierarchyIR, HSpliceItems),
-    schedule_program_dependencies(SplicedHierarchyIR, ScheduledIR, ScheduleItems),
-    memoise_program(ScheduledIR, MemoisedIR, MemoItems),
+    memoise_program(SplicedHierarchyIR, MemoisedIR, MemoItems),
     simplify_program(MemoisedIR, SimplifiedIR, SimplifyItems),
     optimise_list_formulas(SimplifiedIR, ListFormulaIR, ListFormulaItems),
 optimise_indexicals(ListFormulaIR, IndexicalIR, IndexicalItems),
@@ -80,35 +67,20 @@ rewrite_grouped_subterms(IndexicalIR, GroupedIR, GroupedItems),
 optimise_recursive_index_loops(GroupedIR, RecursiveIndexIR, RecursiveIndexItems),
     splice_program(RecursiveIndexIR, SplicedIR, _SpliceItems),
     convert_deterministic_loops(SplicedIR, LoopIR, LoopItems),
-loop_splice_program(LoopIR, LoopSpliceIR, LoopSpliceItems),
-nd_to_loop_program(LoopSpliceIR, NDLoopIR, NDLoopItems),
-nd_classify_program(ProgramIR, _NDClassifiedIR, NDClassifyItems),
-analyse_enumerators(ProgramIR, NDLoopIR, EnumeratorItems),
+    analyse_enumerators(ProgramIR, LoopIR, EnumeratorItems),
     append(UnfoldItems, GraphItems, Items0),
     append(Items0, HoistItems, Items1),
     append(Items1, HSpliceItems, Items2),
-    append(Items2, ScheduleItems, Items3),
-    append(Items3, MemoItems, Items4),
-    append(Items4, SimplifyItems, Items5),
-    append(Items5, ListFormulaItems, Items6),
-    append(Items6, IndexicalItems, Items7),
-append(Items7, GroupedItems, Items8),
+    append(Items2, MemoItems, Items3),
+    append(Items3, SimplifyItems, Items4),
+    append(Items4, ListFormulaItems, Items5),
+    append(Items5, IndexicalItems, Items6),
+append(Items6, GroupedItems, Items7),
 
-append(Items8, RecursiveIndexItems, Items9),
-    append(Items9, LoopItems, Items10),
-    append(Items10, LoopSpliceItems, Items11),
-    append(Items11, NDLoopItems, Items12),
-    append(Items12, NDClassifyItems, Items13),
-    append(Items13, EnumeratorItems, Items14),
-    enforce_stage17_safety(ProgramIR, NDLoopIR, Items14, OptimisedIR, Items).
-
-schedule_program_dependencies([], [], []).
-schedule_program_dependencies([ir_clause(Id, Head, BodyIn, Meta)|RestIn],
-                              [ir_clause(Id, Head, BodyOut, Meta)|RestOut],
-                              Report) :-
-    schedule_dependencies(BodyIn, [], BodyOut, ClauseReport),
-    schedule_program_dependencies(RestIn, RestOut, RestReport),
-    append(ClauseReport, RestReport, Report).
+append(Items7, RecursiveIndexItems, Items8),
+    append(Items8, LoopItems, Items9),
+    append(Items9, EnumeratorItems, Items10),
+    enforce_stage17_safety(ProgramIR, LoopIR, Items10, OptimisedIR, Items).
 
 write_program(OutputPath, ProgramIR) :-
     setup_call_cleanup(
