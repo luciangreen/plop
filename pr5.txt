@@ -1,0 +1,276 @@
+Below is a further GitHub Agent Program Requirements block for the current Plop repo, extending its existing optimiser, JS web UI, tests, and README structure. Plop already includes optimiser stages such as unfolding, memoisation, formula discovery, hierarchical shared-subgoal splicing, deterministic loop conversion, safety classification, reporter, and a JavaScript plop.html web version.  ￼
+
+PR: Plop ND→D Loop-Splice Class System
+Goal:
+Add a full nondeterminism-to-determinism classifier that decides whether Prolog choicepoint code can be converted 1:1 into deterministic loops, maps, folds, flatmaps, spliced outputs, or memoised dependent loops without changing meaning.
+New Prolog files:
+- nd_classify.pl
+- nd_to_loop.pl
+- loop_splice.pl
+- expensive_dependency.pl
+- mnn_signature.pl
+- examples/nd_class_input.pl
+- examples/loop_splice_input.pl
+- examples/expensive_nested_input.pl
+- out/nd_class_output.pl
+- out/loop_splice_output.pl
+- tests/test_nd_classify.pl
+- tests/test_loop_splice.pl
+- tests/test_expensive_dependency.pl
+Required classes:
+1. deterministic
+2. enumerator
+3. map_compatible
+4. fold_compatible
+5. flatmap_compatible
+6. filter_compatible
+7. splice_compatible
+8. dependent_nested_loop
+9. hoistable_expensive_dependency
+10. memo_safe_expensive_dependency
+11. unknown_cost_dependency
+12. unsafe_nondeterminism
+13. requires_interpreter_construct
+Core predicate requirements:
+nd_classify_program(+ProgramIR, -ClassifiedIR, -Report).
+nd_classify_predicate(+Predicate, +ProgramIR, -Class, -Reasons).
+nd_goal_class(+Goal, +Context, -Class).
+nd_body_class(+Body, +Context, -Class, -DependencyGraph).
+can_convert_1_to_1(+Predicate, +ProgramIR, -Decision).
+Decision must be one of:
+- yes(Class, TransformPlan)
+- no(Reason)
+- unknown(Reason, RequiredDeclarations)
+Required transform predicates:
+nd_to_loop_program(+ProgramIR, -OptimisedIR, -Report).
+nd_to_loop_predicate(+Predicate, +ProgramIR, -OptimisedIR, -Report).
+convert_findall_to_loop(+Clause, -LoopClause, -Report).
+convert_map_to_loop(+Clause, -LoopClause, -Report).
+convert_fold_to_loop(+Clause, -LoopClause, -Report).
+convert_flatmap_to_nested_loop(+Clause, -LoopClause, -Report).
+convert_splice_templates(+Clause, -SplicedClause, -Report).
+Required expensive dependency predicates:
+detect_expensive_subgoals(+Body, -ExpensiveGoals).
+detect_repeated_expensive_subgoals(+Body, -Repeated).
+hoist_expensive_if_safe(+Body, -NewBody, -Report).
+memoise_expensive_if_unknown(+Body, -NewBody, -Report).
+classify_expensive_dependency(+Goal, +ProgramIR, -Class).
+Classes:
+- pure_deterministic_expensive
+- pure_nondet_expensive
+- impure_expensive
+- recursive_expensive
+- unknown_expensive
+- memo_safe_unknown
+- must_not_hoist
+Required declarations:
+:- pure Predicate/Arity.
+:- deterministic Predicate/Arity.
+:- nondet Predicate/Arity.
+:- expensive Predicate/Arity.
+:- memo_safe Predicate/Arity.
+:- no_hoist Predicate/Arity.
+:- no_loop_convert Predicate/Arity.
+:- output_template Predicate/Arity.
+:- enumerator Predicate/Arity.
+:- mnn_signature Predicate/Arity, Signature.
+Required MNN/O(1) recognition layer:
+mnn_signature(+Clause, -Signature).
+mnn_lookup_class(+Signature, -Class).
+mnn_transform_hint(+Signature, -Hint).
+mnn_signature_index(+ProgramIR, -Index).
+Use signatures such as:
+- sig_findall_member_template
+- sig_findall_member_accumulator
+- sig_member_filter_template
+- sig_member_nested_member_template
+- sig_repeated_expensive_template
+- sig_shared_expensive_multi_template
+- sig_unknown_cost_dependency
+- sig_meta_call_blocked
+- sig_cut_blocked
+- sig_io_blocked
+The classifier should favour O(1)-style indexed recognition where possible:
+1. Build signature index once.
+2. Lookup known patterns by signature.
+3. Only fall back to deeper structural analysis when the signature is unknown.
+Required safety rules:
+Do not transform if the body contains:
+- cut
+- assert/retract
+- IO
+- random
+- var/nonvar-sensitive logic
+- call/N unless declared safe
+- once/1 unless semantics are preserved
+- negation-as-failure unless explicitly supported
+- disjunction unless converted to an equivalent tagged branch structure
+Required semantic checks:
+The optimiser must verify:
+1. Same output variables.
+2. Same answer order where order matters.
+3. Same multiplicity where duplicates matter.
+4. Same failure behaviour.
+5. Same determinism after conversion.
+6. Same template construction.
+7. No accidental loss of nondeterministic answers.
+8. No repeated expensive call if safely avoidable.
+9. No hoisting across unsafe dependency boundaries.
+Required example 1: map-compatible nondeterminism
+Input:
+collect(Xs, Ys) :-
+    findall(Y, (member(X, Xs), f(X, Y)), Ys).
+Output:
+collect(Xs, Ys) :-
+    collect_loop(Xs, [], Rev),
+    reverse(Rev, Ys).
+collect_loop([], Acc, Acc).
+collect_loop([X|Xs], Acc, Ys) :-
+    f(X, Y),
+    collect_loop(Xs, [Y|Acc], Ys).
+Required example 2: fold-compatible nondeterminism
+Input:
+total(Xs, Total) :-
+    findall(V, (member(X, Xs), score(X, V)), Vs),
+    sum_list(Vs, Total).
+Output:
+total(Xs, Total) :-
+    total_loop(Xs, 0, Total).
+total_loop([], Acc, Acc).
+total_loop([X|Xs], Acc0, Total) :-
+    score(X, V),
+    Acc1 is Acc0 + V,
+    total_loop(Xs, Acc1, Total).
+Required example 3: spliced templates
+Input:
+report(Xs, Pairs, Triples) :-
+    findall([X,A], (member(X,Xs), expensive(X,A)), Pairs),
+    findall([X,A,B], (member(X,Xs), expensive(X,A), other(A,B)), Triples).
+Output:
+report(Xs, Pairs, Triples) :-
+    report_loop(Xs, [], RPairs, [], RTriples),
+    reverse(RPairs, Pairs),
+    reverse(RTriples, Triples).
+report_loop([], Pairs, Pairs, Triples, Triples).
+report_loop([X|Xs], Pairs0, Pairs, Triples0, Triples) :-
+    expensive(X,A),
+    Pairs1 = [[X,A]|Pairs0],
+    other(A,B),
+    Triples1 = [[X,A,B]|Triples0],
+    report_loop(Xs, Pairs1, Pairs, Triples1, Triples).
+Required example 4: nested dependent expensive subpredicate
+Input:
+nested(Xs, Out) :-
+    findall(Z,
+        ( member(X, Xs),
+          expensive(X, A),
+          member(Y, A),
+          transform(X, Y, Z)
+        ),
+        Out).
+Output:
+nested(Xs, Out) :-
+    nested_loop(Xs, [], Rev),
+    reverse(Rev, Out).
+nested_loop([], Acc, Acc).
+nested_loop([X|Xs], Acc0, Out) :-
+    expensive(X, A),
+    nested_inner_loop(X, A, Acc0, Acc1),
+    nested_loop(Xs, Acc1, Out).
+nested_inner_loop(_, [], Acc, Acc).
+nested_inner_loop(X, [Y|Ys], Acc0, Acc) :-
+    transform(X, Y, Z),
+    nested_inner_loop(X, Ys, [Z|Acc0], Acc).
+Required JavaScript web additions:
+Update plop.html with new tabs:
+- ND→D Classifier
+- Loop Conversion
+- Spliced Output
+- Expensive Dependency
+- MNN Signature Index
+Each tab must include:
+1. Input Prolog textarea.
+2. Example buttons.
+3. Run button.
+4. Optimised output panel.
+5. Classification report panel.
+6. Safety warnings.
+7. Explanation of why conversion was accepted, rejected, or unknown.
+Required JavaScript functions:
+- runNDClassifier()
+- runNDToLoop()
+- runLoopSplice()
+- runExpensiveDependency()
+- runMNNSignature()
+- classifyNDProgram()
+- convertNDToLoop()
+- detectSplicedTemplates()
+- detectExpensiveDependencies()
+- buildMNNSignatureIndex()
+Required report item types:
+- nd_classified
+- nd_loop_converted
+- nd_map_converted
+- nd_fold_converted
+- nd_flatmap_converted
+- nd_splice_converted
+- expensive_hoisted
+- expensive_memoised
+- expensive_unknown
+- mnn_signature_matched
+- mnn_signature_unknown
+- skipped_nd_conversion
+- unsafe_nd_conversion
+Required README additions:
+Add section:
+“ND→D Loop-Splice Class System”
+Explain:
+Plop can now analyse Prolog nondeterminism and decide whether it can be expressed as deterministic loops, maplist-style transformations, fold-style accumulators, flatmap/nested loops, or spliced output generation.
+Add command:
+swipl -q -s optimiser.pl \
+  -g "optimise_file('examples/loop_splice_input.pl','out/loop_splice_output.pl')" \
+  -t halt
+Add example:
+Input:
+report(Xs, Pairs, Triples) :-
+    findall([X,A], (member(X,Xs), expensive(X,A)), Pairs),
+    findall([X,A,B], (member(X,Xs), expensive(X,A), other(A,B)), Triples).
+Output:
+report(Xs, Pairs, Triples) :-
+    report_loop(Xs, [], RPairs, [], RTriples),
+    reverse(RPairs, Pairs),
+    reverse(RTriples, Triples).
+Add safety note:
+Plop does not remove nondeterminism blindly. It classifies the meaning of the nondeterminism first. If the code contains cuts, IO, meta-calls, random predicates, var-sensitive predicates, or unknown expensive predicates, Plop either skips the transformation or requires explicit declarations.
+Required tests:
+test_nd_classify:
+- deterministic predicate classified as deterministic
+- member/2 classified as enumerator
+- findall/member/template classified as map_compatible
+- findall/member/sum classified as fold_compatible
+- nested member classified as flatmap_compatible
+- repeated expensive template classified as splice_compatible
+- IO predicate rejected
+- cut predicate rejected
+- unknown expensive predicate marked unknown
+test_loop_splice:
+- repeated expensive call is run once per X
+- output templates preserved
+- order preserved
+- duplicate answers preserved
+- nested dependent loops preserve meaning
+test_mnn_signature:
+- known signatures classify without deep search
+- unknown signatures fall back to structural classifier
+- unsafe signatures are blocked
+Acceptance criteria:
+1. Existing Plop tests still pass.
+2. New ND classifier tests pass.
+3. JavaScript web version can demonstrate every new class.
+4. README documents all new stages.
+5. Optimisation report explains each decision.
+6. Unsafe or unknown cases are not silently transformed.
+7. Expensive subpredicates are hoisted only when safe.
+8. Unknown expensive subpredicates can be memoised only with declaration or conservative wrapper.
+9. Spliced output preserves all templates.
+10. The system remains compatible with existing Plop pipeline.
