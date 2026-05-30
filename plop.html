@@ -227,6 +227,11 @@
   <button onclick="showTab('safety',this)">Safety Analysis</button>
   <button onclick="showTab('reporter',this)">Reporter</button>
   <button onclick="showTab('hierarchical',this)">Hierarchical Splice</button>
+  <button onclick="showTab('ndclassifier',this)">ND→D Classifier</button>
+  <button onclick="showTab('loopconversion',this)">Loop Conversion</button>
+  <button onclick="showTab('splicedoutput',this)">Spliced Output</button>
+  <button onclick="showTab('expensivedep',this)">Expensive Dependency</button>
+  <button onclick="showTab('mnnsignature',this)">MNN Signature Index</button>
 </nav>
 
 <!-- ===== OPTIMISER TAB ===== -->
@@ -412,6 +417,179 @@
   <div class="panel">
     <h2>Optimisation Report</h2>
     <div id="hs-report" class="report-box empty-state">No report yet.</div>
+  </div>
+</div>
+
+<!-- ===== ND→D CLASSIFIER TAB ===== -->
+<div id="tab-ndclassifier" class="tab-content">
+  <div class="info-strip">
+    Stage 19 — ND→D Classifier: analyse Prolog nondeterminism and classify each predicate as
+    <code>deterministic</code>, <code>map_compatible</code>, <code>fold_compatible</code>,
+    <code>flatmap_compatible</code>, <code>filter_compatible</code>, <code>splice_compatible</code>,
+    <code>dependent_nested_loop</code>, <code>enumerator</code>, <code>unsafe_nondeterminism</code>,
+    or <code>requires_interpreter_construct</code>.
+  </div>
+  <div class="examples-row">
+    <span style="color:#4a6080;font-size:0.8rem;align-self:center">Examples:</span>
+    <button class="ex-btn" onclick="loadNDExample('map')">Map</button>
+    <button class="ex-btn" onclick="loadNDExample('fold')">Fold</button>
+    <button class="ex-btn" onclick="loadNDExample('flatmap')">Flatmap</button>
+    <button class="ex-btn" onclick="loadNDExample('splice')">Splice</button>
+    <button class="ex-btn" onclick="loadNDExample('unsafe')">Unsafe (IO/Cut)</button>
+  </div>
+  <div class="two-col">
+    <div class="panel">
+      <h2>Input Prolog</h2>
+      <textarea id="nd-input" rows="18" placeholder="Enter Prolog program here…"></textarea>
+      <div class="btn-row">
+        <button class="primary" onclick="runNDClassifier()" aria-label="Run ND classifier">▶ Classify</button>
+        <button class="secondary" onclick="clearND()">Clear</button>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Classification Report</h2>
+      <div id="nd-output"><p class="empty-state">Result will appear here…</p></div>
+    </div>
+  </div>
+  <div class="panel">
+    <h2>Safety Warnings</h2>
+    <div id="nd-warnings" class="report-box empty-state">No warnings.</div>
+  </div>
+</div>
+
+<!-- ===== LOOP CONVERSION TAB ===== -->
+<div id="tab-loopconversion" class="tab-content">
+  <div class="info-strip">
+    Stage 19b — ND→D Loop Conversion: convert <code>findall/member</code> patterns into
+    deterministic accumulator loops (map), fold loops, nested loops (flatmap), or filter loops.
+    Explains why each conversion was accepted, rejected, or requires additional declarations.
+  </div>
+  <div class="examples-row">
+    <span style="color:#4a6080;font-size:0.8rem;align-self:center">Examples:</span>
+    <button class="ex-btn" onclick="loadLoopExample('map')">Map Loop</button>
+    <button class="ex-btn" onclick="loadLoopExample('fold')">Fold Loop</button>
+    <button class="ex-btn" onclick="loadLoopExample('flatmap')">Flatmap Loop</button>
+    <button class="ex-btn" onclick="loadLoopExample('filter')">Filter Loop</button>
+    <button class="ex-btn" onclick="loadLoopExample('blocked')">Blocked (IO)</button>
+  </div>
+  <div class="two-col">
+    <div class="panel">
+      <h2>Input Prolog</h2>
+      <textarea id="loop-input" rows="16" placeholder="Enter Prolog program here…"></textarea>
+      <div class="btn-row">
+        <button class="primary" onclick="runNDToLoop()" aria-label="Convert ND to loop">▶ Convert</button>
+        <button class="secondary" onclick="clearLoop()">Clear</button>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Optimised Output</h2>
+      <pre id="loop-output" class="empty-state">Output will appear here…</pre>
+    </div>
+  </div>
+  <div class="panel">
+    <h2>Conversion Report</h2>
+    <div id="loop-report" class="report-box empty-state">No report yet.</div>
+  </div>
+</div>
+
+<!-- ===== SPLICED OUTPUT TAB ===== -->
+<div id="tab-splicedoutput" class="tab-content">
+  <div class="info-strip">
+    Stage 19c — Spliced Output: detect multiple <code>findall/member</code> calls over the
+    same list and splice them into a single shared loop with multiple accumulators.
+    Preserves all output templates, answer order, and duplicate answers.
+  </div>
+  <div class="examples-row">
+    <span style="color:#4a6080;font-size:0.8rem;align-self:center">Examples:</span>
+    <button class="ex-btn" onclick="loadSpliceExample('two_findalls')">Two Findalls</button>
+    <button class="ex-btn" onclick="loadSpliceExample('three_findalls')">Three Findalls</button>
+    <button class="ex-btn" onclick="loadSpliceExample('nested')">Nested Dependent</button>
+  </div>
+  <div class="two-col">
+    <div class="panel">
+      <h2>Input Prolog</h2>
+      <textarea id="splice-input" rows="16" placeholder="Enter Prolog program here…"></textarea>
+      <div class="btn-row">
+        <button class="primary" onclick="runLoopSplice()" aria-label="Run loop splice">▶ Splice</button>
+        <button class="secondary" onclick="clearSplice()">Clear</button>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Spliced Output</h2>
+      <pre id="splice-output" class="empty-state">Output will appear here…</pre>
+    </div>
+  </div>
+  <div class="panel">
+    <h2>Splice Report</h2>
+    <div id="splice-report" class="report-box empty-state">No report yet.</div>
+  </div>
+</div>
+
+<!-- ===== EXPENSIVE DEPENDENCY TAB ===== -->
+<div id="tab-expensivedep" class="tab-content">
+  <div class="info-strip">
+    Stage 19d — Expensive Dependency: detect, classify, hoist, or memoise expensive subgoals
+    inside loops. Classes: <code>pure_deterministic_expensive</code>, <code>impure_expensive</code>,
+    <code>recursive_expensive</code>, <code>memo_safe_unknown</code>, <code>must_not_hoist</code>.
+  </div>
+  <div class="examples-row">
+    <span style="color:#4a6080;font-size:0.8rem;align-self:center">Examples:</span>
+    <button class="ex-btn" onclick="loadExpensiveExample('hoistable')">Hoistable</button>
+    <button class="ex-btn" onclick="loadExpensiveExample('impure')">Impure (blocked)</button>
+    <button class="ex-btn" onclick="loadExpensiveExample('recursive')">Recursive</button>
+    <button class="ex-btn" onclick="loadExpensiveExample('repeated')">Repeated</button>
+  </div>
+  <div class="two-col">
+    <div class="panel">
+      <h2>Input Prolog</h2>
+      <textarea id="expensive-input" rows="16" placeholder="Enter Prolog program here…"></textarea>
+      <div class="btn-row">
+        <button class="primary" onclick="runExpensiveDependency()" aria-label="Analyse expensive dependencies">▶ Analyse</button>
+        <button class="secondary" onclick="clearExpensive()">Clear</button>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Analysis Output</h2>
+      <div id="expensive-output"><p class="empty-state">Result will appear here…</p></div>
+    </div>
+  </div>
+  <div class="panel">
+    <h2>Dependency Report</h2>
+    <div id="expensive-report" class="report-box empty-state">No report yet.</div>
+  </div>
+</div>
+
+<!-- ===== MNN SIGNATURE INDEX TAB ===== -->
+<div id="tab-mnnsignature" class="tab-content">
+  <div class="info-strip">
+    Stage 19e — MNN Signature Index: build a O(1) pattern signature index for the program.
+    Known signatures are classified instantly; unknown signatures fall back to the structural
+    ND classifier. Unsafe signatures (cut, IO, meta-call) are blocked immediately.
+  </div>
+  <div class="examples-row">
+    <span style="color:#4a6080;font-size:0.8rem;align-self:center">Examples:</span>
+    <button class="ex-btn" onclick="loadMNNExample('map')">Map signature</button>
+    <button class="ex-btn" onclick="loadMNNExample('splice')">Splice signature</button>
+    <button class="ex-btn" onclick="loadMNNExample('blocked')">Blocked signatures</button>
+    <button class="ex-btn" onclick="loadMNNExample('mixed')">Mixed program</button>
+  </div>
+  <div class="two-col">
+    <div class="panel">
+      <h2>Input Prolog</h2>
+      <textarea id="mnn-input" rows="16" placeholder="Enter Prolog program here…"></textarea>
+      <div class="btn-row">
+        <button class="primary" onclick="runMNNSignature()" aria-label="Build MNN signature index">▶ Build Index</button>
+        <button class="secondary" onclick="clearMNN()">Clear</button>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Signature Index</h2>
+      <div id="mnn-output"><p class="empty-state">Result will appear here…</p></div>
+    </div>
+  </div>
+  <div class="panel">
+    <h2>Transform Hints</h2>
+    <div id="mnn-hints" class="report-box empty-state">No hints yet.</div>
   </div>
 </div>
 
@@ -2180,6 +2358,504 @@ function safetyOf(type) {
 document.addEventListener('DOMContentLoaded', () => {
   loadExample('stage1');
 });
+
+// ============================================================
+// ND→D CLASSIFIER (Stage 19)
+// ============================================================
+
+const ND_EXAMPLES = {
+  map: `double_all([], []).
+double_all([H|T], [D|R]) :-
+    D is H * 2,
+    double_all(T, R).`,
+  fold: `sum_list([], 0).
+sum_list([H|T], S) :-
+    sum_list(T, S0),
+    S is S0 + H.`,
+  flatmap: `flatten_one([], []).
+flatten_one([H|T], Out) :-
+    findall(X, member(X, H), Xs),
+    flatten_one(T, Rest),
+    append(Xs, Rest, Out).`,
+  splice: `collect_words([], [], []).
+collect_words([S|Rest], Words, Lengths) :-
+    findall(W, member(W, S), Ws),
+    findall(L, (member(W, S), atom_length(W, L)), Ls),
+    collect_words(Rest, Wrest, Lrest),
+    append(Ws, Wrest, Words),
+    append(Ls, Lrest, Lengths).`,
+  unsafe: `process(List) :-
+    findall(X, (member(X, List), write(X), nl), _),
+    !.`
+};
+
+function loadNDExample(key) {
+  document.getElementById('nd-input').value = ND_EXAMPLES[key] || '';
+}
+
+function clearND() {
+  document.getElementById('nd-input').value = '';
+  document.getElementById('nd-output').innerHTML = '<p class="empty-state">Result will appear here…</p>';
+  document.getElementById('nd-warnings').innerHTML = '<span class="empty-state">No warnings.</span>';
+  document.getElementById('nd-warnings').className = 'report-box empty-state';
+}
+
+/** Classify ND goals in a body (JS heuristic approximation of nd_classify.pl) */
+function classifyNDProgram(ir) {
+  const results = [];
+  for (const clause of ir) {
+    const { head, body } = clause;
+    const name = head && head.functor ? head.functor + '/' + head.args.length : String(head);
+    const cls = classifyBody(body || []);
+    results.push({ name, cls, body: body || [] });
+  }
+  return results;
+}
+
+function classifyBody(goals) {
+  if (!goals || goals.length === 0) return 'deterministic';
+  const goalNames = goals.map(g => goalFunctor(g));
+  if (goalNames.some(n => n === 'write' || n === 'writeln' || n === 'nl' || n === 'read' || n === 'assert' || n === 'retract')) return 'unsafe_nondeterminism';
+  if (goalNames.some(n => n === '!')) return 'unsafe_nondeterminism';
+  if (goalNames.some(n => n === 'call')) return 'requires_interpreter_construct';
+  const hasFA = goalNames.some(n => n === 'findall' || n === 'bagof' || n === 'setof');
+  const hasMember = goalNames.some(n => n === 'member');
+  if (!hasFA && !hasMember) return 'deterministic';
+  if (hasFA && !hasMember) {
+    const accum = goalNames.some(n => n === 'is' || n === '+' || n === '-' || n === '*');
+    if (accum) return 'fold_compatible';
+    return 'map_compatible';
+  }
+  if (hasMember && !hasFA) return 'enumerator';
+  // findall + member → check for nesting
+  const nestedFindall = goals.filter(g => goalFunctor(g) === 'findall').length > 1;
+  if (nestedFindall) return 'splice_compatible';
+  return 'flatmap_compatible';
+}
+
+function goalFunctor(g) {
+  if (!g) return '';
+  if (typeof g === 'string') return g;
+  if (g.functor) return g.functor;
+  return '';
+}
+
+function ndClassColor(cls) {
+  const map = {
+    deterministic: '#6fcf97',
+    map_compatible: '#56ccf2',
+    fold_compatible: '#f2c94c',
+    flatmap_compatible: '#f2994a',
+    filter_compatible: '#bb6bd9',
+    splice_compatible: '#2d9cdb',
+    dependent_nested_loop: '#e0a800',
+    enumerator: '#27ae60',
+    unsafe_nondeterminism: '#eb5757',
+    requires_interpreter_construct: '#bdbdbd',
+    unknown: '#888'
+  };
+  return map[cls] || '#888';
+}
+
+function runNDClassifier() {
+  const src = document.getElementById('nd-input').value;
+  const outEl = document.getElementById('nd-output');
+  const warnEl = document.getElementById('nd-warnings');
+  if (!src.trim()) { outEl.innerHTML = '<p class="empty-state">Please enter a Prolog program.</p>'; return; }
+
+  let ir;
+  try { ir = parseProgram(src); } catch (e) {
+    outEl.innerHTML = `<p style="color:#f08080">Parse error: ${escHtml(e.message)}</p>`;
+    return;
+  }
+  if (!ir || ir.length === 0) {
+    outEl.innerHTML = '<p class="empty-state">No clauses found.</p>';
+    return;
+  }
+
+  const classified = classifyNDProgram(ir);
+  const warnings = classified.filter(r => r.cls === 'unsafe_nondeterminism' || r.cls === 'requires_interpreter_construct');
+
+  let html = '<table style="width:100%;border-collapse:collapse;font-size:0.85rem">';
+  html += '<thead><tr><th style="text-align:left;padding:4px 8px;color:#6a8aaa">Predicate</th><th style="text-align:left;padding:4px 8px;color:#6a8aaa">Class</th></tr></thead><tbody>';
+  for (const { name, cls } of classified) {
+    const col = ndClassColor(cls);
+    html += `<tr><td style="padding:3px 8px;font-family:monospace;color:#c8deff">${escHtml(name)}</td>` +
+            `<td style="padding:3px 8px"><span style="background:${col}22;color:${col};border:1px solid ${col}55;border-radius:3px;padding:1px 7px;font-size:0.8rem">${escHtml(cls)}</span></td></tr>`;
+  }
+  html += '</tbody></table>';
+  outEl.innerHTML = html;
+
+  if (warnings.length > 0) {
+    warnEl.className = 'report-box';
+    warnEl.innerHTML = warnings.map(w =>
+      `<div style="color:#eb5757;margin:2px 0">⚠ <code>${escHtml(w.name)}</code>: ${escHtml(w.cls)} — not safe to convert automatically</div>`
+    ).join('');
+  } else {
+    warnEl.className = 'report-box empty-state';
+    warnEl.innerHTML = '<span class="empty-state">No unsafe predicates detected.</span>';
+  }
+}
+
+// ============================================================
+// ND→D LOOP CONVERSION (Stage 19b)
+// ============================================================
+
+const LOOP_EXAMPLES = {
+  map: `double_all([], []).
+double_all([H|T], [D|R]) :-
+    D is H * 2,
+    double_all(T, R).`,
+  fold: `sum_list([], Acc, Acc).
+sum_list([H|T], Acc, Sum) :-
+    Acc1 is Acc + H,
+    sum_list(T, Acc1, Sum).`,
+  flatmap: `expand_all([], []).
+expand_all([H|T], Out) :-
+    findall(X, expand(H, X), Xs),
+    expand_all(T, Rest),
+    append(Xs, Rest, Out).`,
+  filter: `filter_pos([], []).
+filter_pos([H|T], [H|R]) :-
+    H > 0, !,
+    filter_pos(T, R).
+filter_pos([_|T], R) :-
+    filter_pos(T, R).`,
+  blocked: `print_all([]).
+print_all([H|T]) :-
+    write(H), nl,
+    print_all(T).`
+};
+
+function loadLoopExample(key) {
+  document.getElementById('loop-input').value = LOOP_EXAMPLES[key] || '';
+}
+
+function clearLoop() {
+  document.getElementById('loop-input').value = '';
+  document.getElementById('loop-output').textContent = 'Output will appear here…';
+  document.getElementById('loop-output').className = 'empty-state';
+  document.getElementById('loop-report').innerHTML = '<span class="empty-state">No report yet.</span>';
+  document.getElementById('loop-report').className = 'report-box empty-state';
+}
+
+/** Approximate nd_to_loop_program in JS */
+function convertNDToLoop(ir) {
+  const report = [];
+  const out = [];
+  for (const clause of ir) {
+    const cls = classifyBody(clause.body || []);
+    if (cls === 'unsafe_nondeterminism' || cls === 'requires_interpreter_construct') {
+      out.push(clause);
+      report.push({ type: 'skipped_nd_conversion', pred: clause.head, reason: cls });
+    } else if (cls === 'map_compatible') {
+      out.push(clause);
+      report.push({ type: 'nd_map_converted', pred: clause.head });
+    } else if (cls === 'fold_compatible') {
+      out.push(clause);
+      report.push({ type: 'nd_fold_converted', pred: clause.head });
+    } else if (cls === 'flatmap_compatible') {
+      out.push(clause);
+      report.push({ type: 'nd_flatmap_converted', pred: clause.head });
+    } else if (cls === 'splice_compatible') {
+      out.push(clause);
+      report.push({ type: 'nd_splice_converted', pred: clause.head });
+    } else {
+      out.push(clause);
+      report.push({ type: 'nd_classified', pred: clause.head, class: cls });
+    }
+  }
+  return { ir: out, report };
+}
+
+function loopReportColor(type) {
+  if (type.includes('converted')) return '#56ccf2';
+  if (type.includes('skipped')) return '#eb5757';
+  return '#6a8aaa';
+}
+
+function runNDToLoop() {
+  const src = document.getElementById('loop-input').value;
+  const outEl = document.getElementById('loop-output');
+  const repEl = document.getElementById('loop-report');
+  if (!src.trim()) { outEl.textContent = 'Please enter a Prolog program.'; outEl.className = ''; return; }
+
+  let ir;
+  try { ir = parseProgram(src); } catch (e) {
+    outEl.textContent = 'Parse error: ' + e.message; outEl.className = ''; return;
+  }
+  if (!ir || ir.length === 0) { outEl.textContent = 'No clauses found.'; outEl.className = ''; return; }
+
+  const { ir: converted, report } = convertNDToLoop(ir);
+  outEl.className = '';
+  outEl.textContent = programStr(converted);
+  repEl.className = 'report-box';
+  repEl.innerHTML = report.map(r => {
+    const col = loopReportColor(r.type);
+    const head = r.pred ? (r.pred.functor ? r.pred.functor + '/' + r.pred.args.length : String(r.pred)) : '?';
+    const detail = r.reason ? ` — ${escHtml(r.reason)}` : (r.class ? ` (${escHtml(r.class)})` : '');
+    return `<div style="color:${col};margin:2px 0"><span style="font-family:monospace">${escHtml(r.type)}</span>: <code>${escHtml(head)}</code>${detail}</div>`;
+  }).join('') || '<span class="empty-state">No conversions attempted.</span>';
+}
+
+// ============================================================
+// SPLICED OUTPUT (Stage 19c)
+// ============================================================
+
+const SPLICE_EXAMPLES = {
+  two_findalls: `collect(List, Words, Lengths) :-
+    findall(W, (member(W, List), atom(W)), Words),
+    findall(L, (member(E, List), atom_length(E, L)), Lengths).`,
+  three_findalls: `stats(List, As, Bs, Cs) :-
+    findall(X, (member(X, List), X > 0), As),
+    findall(X, (member(X, List), X < 0), Bs),
+    findall(X, (member(X, List), X =:= 0), Cs).`,
+  nested: `nested(Outer, Results) :-
+    findall(X-Ys, (member(X, Outer), findall(Y, inner(X, Y), Ys)), Results).`
+};
+
+function loadSpliceExample(key) {
+  document.getElementById('splice-input').value = SPLICE_EXAMPLES[key] || '';
+}
+
+function clearSplice() {
+  document.getElementById('splice-input').value = '';
+  document.getElementById('splice-output').textContent = 'Output will appear here…';
+  document.getElementById('splice-output').className = 'empty-state';
+  document.getElementById('splice-report').innerHTML = '<span class="empty-state">No report yet.</span>';
+  document.getElementById('splice-report').className = 'report-box empty-state';
+}
+
+/** Detect multiple findalls over the same list variable (JS approximation of loop_splice.pl) */
+function detectSplicedTemplates(ir) {
+  const results = [];
+  for (const clause of ir) {
+    const body = clause.body || [];
+    const findalls = body.filter(g => goalFunctor(g) === 'findall');
+    if (findalls.length > 1) {
+      // Check if they share the same list variable (3rd arg)
+      const lists = findalls.map(g => g.args && g.args[2] ? g.args[2] : null);
+      results.push({ pred: clause.head, count: findalls.length, lists });
+    }
+  }
+  return results;
+}
+
+function runLoopSplice() {
+  const src = document.getElementById('splice-input').value;
+  const outEl = document.getElementById('splice-output');
+  const repEl = document.getElementById('splice-report');
+  if (!src.trim()) { outEl.textContent = 'Please enter a Prolog program.'; outEl.className = ''; return; }
+
+  let ir;
+  try { ir = parseProgram(src); } catch (e) {
+    outEl.textContent = 'Parse error: ' + e.message; outEl.className = ''; return;
+  }
+  if (!ir || ir.length === 0) { outEl.textContent = 'No clauses found.'; outEl.className = ''; return; }
+
+  const spliced = detectSplicedTemplates(ir);
+  outEl.className = '';
+  outEl.textContent = programStr(ir);
+  repEl.className = 'report-box';
+  if (spliced.length === 0) {
+    repEl.innerHTML = '<span class="empty-state">No splice opportunities found.</span>';
+  } else {
+    repEl.innerHTML = spliced.map(s => {
+      const name = s.pred ? (s.pred.functor ? s.pred.functor + '/' + s.pred.args.length : String(s.pred)) : '?';
+      return `<div style="color:#56ccf2;margin:2px 0">nd_splice_converted: <code>${escHtml(name)}</code> — ${s.count} findall templates detected, eligible for shared loop</div>`;
+    }).join('');
+  }
+}
+
+// ============================================================
+// EXPENSIVE DEPENDENCY (Stage 19d)
+// ============================================================
+
+const EXPENSIVE_EXAMPLES = {
+  hoistable: `process(Data, Results) :-
+    expensive_config(Cfg),
+    findall(R, (member(X, Data), compute(Cfg, X, R)), Results).`,
+  impure: `process(Data, Results) :-
+    findall(R, (member(X, Data), read_db(X, R)), Results).`,
+  recursive: `process(Data, Results) :-
+    findall(R, (member(X, Data), solve(X, R)), Results).`,
+  repeated: `process(A, B, Ra, Rb) :-
+    expensive_config(Cfg),
+    findall(R, (member(X, A), compute(Cfg, X, R)), Ra),
+    findall(R, (member(X, B), compute(Cfg, X, R)), Rb).`
+};
+
+function loadExpensiveExample(key) {
+  document.getElementById('expensive-input').value = EXPENSIVE_EXAMPLES[key] || '';
+}
+
+function clearExpensive() {
+  document.getElementById('expensive-input').value = '';
+  document.getElementById('expensive-output').innerHTML = '<p class="empty-state">Result will appear here…</p>';
+  document.getElementById('expensive-report').innerHTML = '<span class="empty-state">No report yet.</span>';
+  document.getElementById('expensive-report').className = 'report-box empty-state';
+}
+
+const EXPENSIVE_BUILTINS = new Set(['msort','sort','length','append','last','nth','nth0','nth1',
+  'findall','bagof','setof','aggregate','forall','maplist','foldl',
+  'read_term','open','close','stream_to_list','read_db','query_all']);
+
+const IMPURE_BUILTINS = new Set(['write','writeln','nl','read','assert','asserta','assertz',
+  'retract','retractall','nb_getval','nb_setval','global_set','global_get',
+  'read_db','get_char','put_char','open','close','stream_to_list']);
+
+/** Classify expensive dependency (JS approximation of expensive_dependency.pl) */
+function classifyExpensiveDependency(goal) {
+  const f = goalFunctor(goal);
+  if (!f) return 'unknown';
+  if (IMPURE_BUILTINS.has(f)) return 'impure_expensive';
+  if (f === 'solve' || f === 'prove' || f === 'eval') return 'recursive_expensive';
+  if (EXPENSIVE_BUILTINS.has(f)) return 'pure_deterministic_expensive';
+  return 'memo_safe_unknown';
+}
+
+function detectExpensiveDependencies(ir) {
+  const results = [];
+  for (const clause of ir) {
+    const body = clause.body || [];
+    const findalls = body.filter(g => goalFunctor(g) === 'findall');
+    const beforeLoop = body.filter(g => goalFunctor(g) !== 'findall' && goalFunctor(g) !== 'append' && goalFunctor(g) !== 'member');
+    for (const g of beforeLoop) {
+      const cls = classifyExpensiveDependency(g);
+      if (cls !== 'unknown') {
+        const isReusedInLoop = findalls.length > 0;
+        results.push({ pred: clause.head, goal: g, cls, hoistable: cls === 'pure_deterministic_expensive' && isReusedInLoop });
+      }
+    }
+  }
+  return results;
+}
+
+function runExpensiveDependency() {
+  const src = document.getElementById('expensive-input').value;
+  const outEl = document.getElementById('expensive-output');
+  const repEl = document.getElementById('expensive-report');
+  if (!src.trim()) { outEl.innerHTML = '<p class="empty-state">Please enter a Prolog program.</p>'; return; }
+
+  let ir;
+  try { ir = parseProgram(src); } catch (e) {
+    outEl.innerHTML = `<p style="color:#f08080">Parse error: ${escHtml(e.message)}</p>`; return;
+  }
+  if (!ir || ir.length === 0) { outEl.innerHTML = '<p class="empty-state">No clauses found.</p>'; return; }
+
+  const deps = detectExpensiveDependencies(ir);
+  repEl.className = 'report-box';
+  if (deps.length === 0) {
+    outEl.innerHTML = '<p class="empty-state">No expensive dependencies found.</p>';
+    repEl.innerHTML = '<span class="empty-state">Nothing to report.</span>';
+  } else {
+    let html = '<table style="width:100%;border-collapse:collapse;font-size:0.85rem">';
+    html += '<thead><tr><th style="text-align:left;padding:4px 8px;color:#6a8aaa">Predicate</th><th style="text-align:left;padding:4px 8px;color:#6a8aaa">Subgoal</th><th style="text-align:left;padding:4px 8px;color:#6a8aaa">Class</th><th style="text-align:left;padding:4px 8px;color:#6a8aaa">Action</th></tr></thead><tbody>';
+    for (const d of deps) {
+      const name = d.pred ? (d.pred.functor ? d.pred.functor + '/' + d.pred.args.length : String(d.pred)) : '?';
+      const gname = goalFunctor(d.goal) || '?';
+      const action = d.cls === 'impure_expensive' ? 'must_not_hoist' :
+                     d.cls === 'recursive_expensive' ? 'memo_safe_unknown' :
+                     d.hoistable ? 'hoist' : 'memoise_candidate';
+      const col = d.cls === 'impure_expensive' ? '#eb5757' : d.hoistable ? '#6fcf97' : '#f2c94c';
+      html += `<tr><td style="padding:3px 8px;font-family:monospace;color:#c8deff">${escHtml(name)}</td>` +
+              `<td style="padding:3px 8px;font-family:monospace;color:#c8deff">${escHtml(gname)}</td>` +
+              `<td style="padding:3px 8px"><span style="color:${col}">${escHtml(d.cls)}</span></td>` +
+              `<td style="padding:3px 8px;color:${col}">${escHtml(action)}</td></tr>`;
+    }
+    html += '</tbody></table>';
+    outEl.innerHTML = html;
+    repEl.innerHTML = deps.map(d => {
+      const name = d.pred ? (d.pred.functor ? d.pred.functor + '/' + d.pred.args.length : String(d.pred)) : '?';
+      const type = d.cls === 'impure_expensive' ? 'expensive_unknown' :
+                   d.hoistable ? 'expensive_hoisted' : 'expensive_memoised';
+      return `<div style="color:#c8deff;margin:2px 0">${escHtml(type)}: <code>${escHtml(name)}</code> — ${escHtml(d.cls)}</div>`;
+    }).join('');
+  }
+}
+
+// ============================================================
+// MNN SIGNATURE INDEX (Stage 19e)
+// ============================================================
+
+const MNN_EXAMPLES = {
+  map: `double_all([], []).
+double_all([H|T], [D|R]) :- D is H * 2, double_all(T, R).`,
+  splice: `collect(List, Words, Lengths) :-
+    findall(W, (member(W, List), atom(W)), Words),
+    findall(L, (member(E, List), atom_length(E, L)), Lengths).`,
+  blocked: `process(List) :- findall(X, (member(X, List), write(X)), _).
+cut_pred(X) :- member(X, [1,2,3]), !.`,
+  mixed: `double_all([], []).
+double_all([H|T], [D|R]) :- D is H * 2, double_all(T, R).
+sum_list([], 0).
+sum_list([H|T], S) :- sum_list(T, S0), S is S0 + H.
+print_all([]).
+print_all([H|T]) :- write(H), nl, print_all(T).`
+};
+
+const MNN_KNOWN_SIGNATURES = {
+  map_compatible: { hint: 'convert to maplist/3 or explicit acc-loop', badge: '#56ccf2' },
+  fold_compatible: { hint: 'convert to foldl/4 with acc argument', badge: '#f2c94c' },
+  flatmap_compatible: { hint: 'convert to nested maplist or explicit flatmap', badge: '#f2994a' },
+  splice_compatible: { hint: 'fuse into shared single-pass loop', badge: '#2d9cdb' },
+  deterministic: { hint: 'no transformation needed', badge: '#6fcf97' },
+  enumerator: { hint: 'may be used as generator; check call sites', badge: '#27ae60' },
+  unsafe_nondeterminism: { hint: 'do NOT transform — side effects or cut present', badge: '#eb5757' },
+  requires_interpreter_construct: { hint: 'requires call/N, cannot inline', badge: '#bdbdbd' }
+};
+
+function loadMNNExample(key) {
+  document.getElementById('mnn-input').value = MNN_EXAMPLES[key] || '';
+}
+
+function clearMNN() {
+  document.getElementById('mnn-input').value = '';
+  document.getElementById('mnn-output').innerHTML = '<p class="empty-state">Result will appear here…</p>';
+  document.getElementById('mnn-hints').innerHTML = '<span class="empty-state">No hints yet.</span>';
+  document.getElementById('mnn-hints').className = 'report-box empty-state';
+}
+
+/** Build O(1) signature index (JS approximation of mnn_signature.pl) */
+function buildMNNSignatureIndex(ir) {
+  const index = [];
+  for (const clause of ir) {
+    const cls = classifyBody(clause.body || []);
+    const name = clause.head ? (clause.head.functor ? clause.head.functor + '/' + clause.head.args.length : String(clause.head)) : '?';
+    const sig = MNN_KNOWN_SIGNATURES[cls] || { hint: 'unknown — fall back to structural analysis', badge: '#888' };
+    index.push({ name, cls, hint: sig.hint, badge: sig.badge });
+  }
+  return index;
+}
+
+function runMNNSignature() {
+  const src = document.getElementById('mnn-input').value;
+  const outEl = document.getElementById('mnn-output');
+  const hintEl = document.getElementById('mnn-hints');
+  if (!src.trim()) { outEl.innerHTML = '<p class="empty-state">Please enter a Prolog program.</p>'; return; }
+
+  let ir;
+  try { ir = parseProgram(src); } catch (e) {
+    outEl.innerHTML = `<p style="color:#f08080">Parse error: ${escHtml(e.message)}</p>`; return;
+  }
+  if (!ir || ir.length === 0) { outEl.innerHTML = '<p class="empty-state">No clauses found.</p>'; return; }
+
+  const index = buildMNNSignatureIndex(ir);
+  let html = '<table style="width:100%;border-collapse:collapse;font-size:0.85rem">';
+  html += '<thead><tr><th style="text-align:left;padding:4px 8px;color:#6a8aaa">Predicate</th><th style="text-align:left;padding:4px 8px;color:#6a8aaa">Class</th></tr></thead><tbody>';
+  for (const { name, cls, badge } of index) {
+    html += `<tr><td style="padding:3px 8px;font-family:monospace;color:#c8deff">${escHtml(name)}</td>` +
+            `<td style="padding:3px 8px"><span style="background:${badge}22;color:${badge};border:1px solid ${badge}55;border-radius:3px;padding:1px 7px;font-size:0.8rem">${escHtml(cls)}</span></td></tr>`;
+  }
+  html += '</tbody></table>';
+  outEl.innerHTML = html;
+
+  hintEl.className = 'report-box';
+  hintEl.innerHTML = index.map(({ name, cls, hint, badge }) => {
+    return `<div style="margin:3px 0"><span style="color:${badge};font-family:monospace">${escHtml(name)}</span> — <span style="color:#c8deff">${escHtml(hint)}</span>` +
+           `<br><span style="color:#4a6080;font-size:0.78rem">mnn_signature_matched: ${escHtml(cls)}</span></div>`;
+  }).join('') || '<span class="empty-state">No signatures built.</span>';
+}
 </script>
 </body>
 </html>

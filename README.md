@@ -403,6 +403,82 @@ matrix_output(A,B) :-
     
 ⸻
 
+ND→D Loop-Splice Class System
+
+The ND→D (nondeterminism-to-determinism) system classifies every Prolog predicate into one of 13 structural classes and decides whether it can be safely converted to a deterministic accumulator loop, map, fold, flatmap, filter, or spliced multi-accumulator loop.
+
+Classes
+
+| Class | Meaning |
+|---|---|
+| `deterministic` | No choicepoints; already deterministic |
+| `enumerator` | Generates solutions via `member/2` or backtracking; use as generator only |
+| `map_compatible` | `findall`-based map; convert to `maplist/3` or explicit accumulator loop |
+| `fold_compatible` | Accumulator recursion; convert to `foldl/4` or explicit fold loop |
+| `flatmap_compatible` | `findall` over expanding generator; convert to nested loop |
+| `filter_compatible` | Conditional `findall`; convert to explicit filter loop |
+| `splice_compatible` | Multiple `findall` calls over same list; fuse into single shared loop |
+| `dependent_nested_loop` | Nested `findall` with shared variable; requires careful hoisting |
+| `hoistable_expensive_dependency` | Expensive pure subgoal inside loop; safe to hoist before loop |
+| `memo_safe_expensive_dependency` | Unknown-cost subgoal; add memoisation table |
+| `unknown_cost_dependency` | Cannot determine cost statically; emit warning |
+| `unsafe_nondeterminism` | Contains side-effectful goals (`write`, `assert`, `retract`) or cut; do **not** transform |
+| `requires_interpreter_construct` | Uses `call/N` or meta-call; cannot inline |
+
+Running the Classifier
+
+```prolog
+swipl -q -s nd_classify.pl -g "nd_classify_program(P,Classified,Report), print_term(Classified,[]), halt" examples/nd_class_input.pl
+```
+
+Loop Splice Example
+
+Input (`examples/loop_splice_input.pl`):
+
+```prolog
+collect(List, Words, Lengths) :-
+    findall(W, (member(W, List), atom(W)), Words),
+    findall(L, (member(E, List), atom_length(E, L)), Lengths).
+```
+
+Running the loop-splice optimiser:
+
+```
+swipl -q -s loop_splice.pl -g "loop_splice_program(P,Out,Report), print_term(Out,[]), halt" examples/loop_splice_input.pl
+```
+
+Expected output — two `findall` templates over the same list fused into a single loop:
+
+```prolog
+collect(List, Words, Lengths) :-
+    loop_splice(List, [W,L], [(atom(W)),(atom_length(E,L))], Words, Lengths).
+```
+
+Report example:
+
+```prolog
+report(nd_splice_converted, collect/3, [templates(2), list_var('List')]).
+```
+
+Expensive Dependency Analysis
+
+Subgoals inside loops are classified and optionally hoisted or memoised:
+
+- `pure_deterministic_expensive` → hoist before loop
+- `impure_expensive` → block transformation (`must_not_hoist`)
+- `recursive_expensive` → add memoisation table
+- `memo_safe_unknown` → suggest memoisation
+
+MNN Signature Index
+
+A O(1) pattern-signature index (`mnn_signature.pl`) lets the pipeline classify and dispatch common patterns instantly, falling back to the full structural classifier only for unknown patterns.
+
+Safety Note
+
+The ND→D system **never** transforms a predicate classified as `unsafe_nondeterminism` or `requires_interpreter_construct` unless experimental mode is enabled via `set_experimental_mode(true)`. All other classes are converted conservatively, preserving answer order and duplicates.
+
+⸻
+
 Licence
 
 BSD 3-Clause License.
