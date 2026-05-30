@@ -38,6 +38,15 @@ report_item_line(indexical_mapping(Pred, Mapping), Line) :-
 report_item_line(loop_converted(Pred), Line) :-
     !,
     format(atom(Line), 'loop_converted: ~w', [Pred]).
+report_item_line(loop_hoisted_count(Count), Line) :-
+    !,
+    format(atom(Line), 'Loop hoisted deps: ~w', [Count]).
+report_item_line(global_hoisted_count(Count), Line) :-
+    !,
+    format(atom(Line), 'Global hoisted deps: ~w', [Count]).
+report_item_line(left_in_loop_count(Count), Line) :-
+    !,
+    format(atom(Line), 'Deps left in loop: ~w', [Count]).
 report_item_line(skipped(Pred, Reason), Line) :-
     !,
     format(atom(Line), 'skipped: ~w (~w)', [Pred, Reason]).
