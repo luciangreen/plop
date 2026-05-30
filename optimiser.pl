@@ -14,6 +14,7 @@
 :- use_module(recursive_index).
 :- use_module(splice).
 :- use_module(loop_conversion).
+:- use_module(loop_dependency_schedule).
 :- use_module(safety).
 :- use_module(grouped_subterms).
 
@@ -27,7 +28,8 @@ optimise_program(ProgramIR, OptimisedIR, optimisation_report(Items)) :-
     build_dependency_graph(UnfoldedIR, Graph, GraphItems),
     hoist_common_dependencies(UnfoldedIR, Graph, HoistedIR, HoistItems),
     hierarchical_splice_program(HoistedIR, SplicedHierarchyIR, HSpliceItems),
-    memoise_program(SplicedHierarchyIR, MemoisedIR, MemoItems),
+    schedule_program_dependencies(SplicedHierarchyIR, ScheduledIR, ScheduleItems),
+    memoise_program(ScheduledIR, MemoisedIR, MemoItems),
     simplify_program(MemoisedIR, SimplifiedIR, SimplifyItems),
     optimise_list_formulas(SimplifiedIR, ListFormulaIR, ListFormulaItems),
 optimise_indexicals(ListFormulaIR, IndexicalIR, IndexicalItems),
@@ -41,23 +43,25 @@ optimise_recursive_index_loops(GroupedIR, RecursiveIndexIR, RecursiveIndexItems)
     append(UnfoldItems, GraphItems, Items0),
     append(Items0, HoistItems, Items1),
     append(Items1, HSpliceItems, Items2),
-    append(Items2, MemoItems, Items3),
-    append(Items3, SimplifyItems, Items4),
-    append(Items4, ListFormulaItems, Items5),
-    append(Items5, IndexicalItems, Items6),
-append(Items6, GroupedItems, Items7),
+    append(Items2, ScheduleItems, Items3),
+    append(Items3, MemoItems, Items4),
+    append(Items4, SimplifyItems, Items5),
+    append(Items5, ListFormulaItems, Items6),
+    append(Items6, IndexicalItems, Items7),
+append(Items7, GroupedItems, Items8),
 
-append(Items7, RecursiveIndexItems, Items8),
-    append(Items8, LoopItems, Items9),
-    append(Items9, EnumeratorItems, Items10),
-    enforce_stage17_safety(ProgramIR, LoopIR, Items10, OptimisedIR, Items).
+append(Items8, RecursiveIndexItems, Items9),
+    append(Items9, LoopItems, Items10),
+    append(Items10, EnumeratorItems, Items11),
+    enforce_stage17_safety(ProgramIR, LoopIR, Items11, OptimisedIR, Items).
 
 optimise_predicate(PredicateNameArity, ProgramIR, OptimisedIR, optimisation_report(Items)) :-
     unfold_predicate(PredicateNameArity, ProgramIR, UnfoldedIR, UnfoldItems),
     build_dependency_graph(UnfoldedIR, Graph, GraphItems),
     hoist_common_dependencies(UnfoldedIR, Graph, HoistedIR, HoistItems),
     hierarchical_splice_program(HoistedIR, SplicedHierarchyIR, HSpliceItems),
-    memoise_program(SplicedHierarchyIR, MemoisedIR, MemoItems),
+    schedule_program_dependencies(SplicedHierarchyIR, ScheduledIR, ScheduleItems),
+    memoise_program(ScheduledIR, MemoisedIR, MemoItems),
     simplify_program(MemoisedIR, SimplifiedIR, SimplifyItems),
     optimise_list_formulas(SimplifiedIR, ListFormulaIR, ListFormulaItems),
 optimise_indexicals(ListFormulaIR, IndexicalIR, IndexicalItems),
@@ -71,16 +75,25 @@ optimise_recursive_index_loops(GroupedIR, RecursiveIndexIR, RecursiveIndexItems)
     append(UnfoldItems, GraphItems, Items0),
     append(Items0, HoistItems, Items1),
     append(Items1, HSpliceItems, Items2),
-    append(Items2, MemoItems, Items3),
-    append(Items3, SimplifyItems, Items4),
-    append(Items4, ListFormulaItems, Items5),
-    append(Items5, IndexicalItems, Items6),
-append(Items6, GroupedItems, Items7),
+    append(Items2, ScheduleItems, Items3),
+    append(Items3, MemoItems, Items4),
+    append(Items4, SimplifyItems, Items5),
+    append(Items5, ListFormulaItems, Items6),
+    append(Items6, IndexicalItems, Items7),
+append(Items7, GroupedItems, Items8),
 
-append(Items7, RecursiveIndexItems, Items8),
-    append(Items8, LoopItems, Items9),
-    append(Items9, EnumeratorItems, Items10),
-    enforce_stage17_safety(ProgramIR, LoopIR, Items10, OptimisedIR, Items).
+append(Items8, RecursiveIndexItems, Items9),
+    append(Items9, LoopItems, Items10),
+    append(Items10, EnumeratorItems, Items11),
+    enforce_stage17_safety(ProgramIR, LoopIR, Items11, OptimisedIR, Items).
+
+schedule_program_dependencies([], [], []).
+schedule_program_dependencies([ir_clause(Id, Head, BodyIn, Meta)|RestIn],
+                              [ir_clause(Id, Head, BodyOut, Meta)|RestOut],
+                              Report) :-
+    schedule_dependencies(BodyIn, [], BodyOut, ClauseReport),
+    schedule_program_dependencies(RestIn, RestOut, RestReport),
+    append(ClauseReport, RestReport, Report).
 
 write_program(OutputPath, ProgramIR) :-
     setup_call_cleanup(
