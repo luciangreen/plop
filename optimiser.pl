@@ -14,6 +14,9 @@
 :- use_module(recursive_index).
 :- use_module(splice).
 :- use_module(loop_conversion).
+:- use_module(nd_classify).
+:- use_module(loop_splice).
+:- use_module(nd_to_loop).
 :- use_module(loop_dependency_schedule).
 :- use_module(safety).
 :- use_module(grouped_subterms).
@@ -39,7 +42,10 @@ rewrite_grouped_subterms(IndexicalIR, GroupedIR, GroupedItems),
 optimise_recursive_index_loops(GroupedIR, RecursiveIndexIR, RecursiveIndexItems),
     splice_program(RecursiveIndexIR, SplicedIR, _SpliceItems),
     convert_deterministic_loops(SplicedIR, LoopIR, LoopItems),
-    analyse_enumerators(ProgramIR, LoopIR, EnumeratorItems),
+loop_splice_program(LoopIR, LoopSpliceIR, LoopSpliceItems),
+nd_to_loop_program(LoopSpliceIR, NDLoopIR, NDLoopItems),
+nd_classify_program(ProgramIR, _NDClassifiedIR, NDClassifyItems),
+analyse_enumerators(ProgramIR, NDLoopIR, EnumeratorItems),
     append(UnfoldItems, GraphItems, Items0),
     append(Items0, HoistItems, Items1),
     append(Items1, HSpliceItems, Items2),
@@ -52,8 +58,11 @@ append(Items7, GroupedItems, Items8),
 
 append(Items8, RecursiveIndexItems, Items9),
     append(Items9, LoopItems, Items10),
-    append(Items10, EnumeratorItems, Items11),
-    enforce_stage17_safety(ProgramIR, LoopIR, Items11, OptimisedIR, Items).
+    append(Items10, LoopSpliceItems, Items11),
+    append(Items11, NDLoopItems, Items12),
+    append(Items12, NDClassifyItems, Items13),
+    append(Items13, EnumeratorItems, Items14),
+    enforce_stage17_safety(ProgramIR, NDLoopIR, Items14, OptimisedIR, Items).
 
 optimise_predicate(PredicateNameArity, ProgramIR, OptimisedIR, optimisation_report(Items)) :-
     unfold_predicate(PredicateNameArity, ProgramIR, UnfoldedIR, UnfoldItems),
@@ -71,7 +80,10 @@ rewrite_grouped_subterms(IndexicalIR, GroupedIR, GroupedItems),
 optimise_recursive_index_loops(GroupedIR, RecursiveIndexIR, RecursiveIndexItems),
     splice_program(RecursiveIndexIR, SplicedIR, _SpliceItems),
     convert_deterministic_loops(SplicedIR, LoopIR, LoopItems),
-    analyse_enumerators(ProgramIR, LoopIR, EnumeratorItems),
+loop_splice_program(LoopIR, LoopSpliceIR, LoopSpliceItems),
+nd_to_loop_program(LoopSpliceIR, NDLoopIR, NDLoopItems),
+nd_classify_program(ProgramIR, _NDClassifiedIR, NDClassifyItems),
+analyse_enumerators(ProgramIR, NDLoopIR, EnumeratorItems),
     append(UnfoldItems, GraphItems, Items0),
     append(Items0, HoistItems, Items1),
     append(Items1, HSpliceItems, Items2),
@@ -84,8 +96,11 @@ append(Items7, GroupedItems, Items8),
 
 append(Items8, RecursiveIndexItems, Items9),
     append(Items9, LoopItems, Items10),
-    append(Items10, EnumeratorItems, Items11),
-    enforce_stage17_safety(ProgramIR, LoopIR, Items11, OptimisedIR, Items).
+    append(Items10, LoopSpliceItems, Items11),
+    append(Items11, NDLoopItems, Items12),
+    append(Items12, NDClassifyItems, Items13),
+    append(Items13, EnumeratorItems, Items14),
+    enforce_stage17_safety(ProgramIR, NDLoopIR, Items14, OptimisedIR, Items).
 
 schedule_program_dependencies([], [], []).
 schedule_program_dependencies([ir_clause(Id, Head, BodyIn, Meta)|RestIn],

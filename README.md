@@ -20,6 +20,7 @@ Implemented stages include:
 * shortcut splicing
 * hierarchical shared-subgoal splicing
 * deterministic loop conversion
+* ND→D loop-splice classification
 * safety classification
 * optimisation reporting
 
@@ -219,6 +220,41 @@ report(X, Z) :-
     T2 = row2(A),
     Z = [T1,T2].
 ```
+
+⸻
+
+ND→D Loop-Splice Class System
+
+Plop can now analyse Prolog nondeterminism and decide whether it can be expressed as deterministic loops, maplist-style transformations, fold-style accumulators, flatmap/nested loops, or spliced output generation.
+
+Run:
+
+```sh
+swipl -q -s optimiser.pl \
+  -g "optimise_file('examples/loop_splice_input.pl','out/loop_splice_output.pl')" \
+  -t halt
+```
+
+Input:
+
+```prolog
+report(Xs, Pairs, Triples) :-
+    findall([X,A], (member(X,Xs), expensive(X,A)), Pairs),
+    findall([X,A,B], (member(X,Xs), expensive(X,A), other(A,B)), Triples).
+```
+
+Output:
+
+```prolog
+report(Xs, Pairs, Triples) :-
+    report_loop(Xs, [], RPairs, [], RTriples),
+    reverse(RPairs, Pairs),
+    reverse(RTriples, Triples).
+```
+
+Safety note:
+
+Plop does not remove nondeterminism blindly. It classifies the meaning of the nondeterminism first. If the code contains cuts, IO, meta-calls, random predicates, var-sensitive predicates, or unknown expensive predicates, Plop either skips the transformation or requires explicit declarations.
 
 ⸻
 

@@ -4,168 +4,209 @@
     detect_spliced_templates/2
 ]).
 
-% Stage 19c — Loop-Splice Optimisation.
-%
-% Detects multiple findall calls over the same enumerator list and
-% splices them into a single shared loop with multiple accumulators,
-% preserving all output templates, answer order, and multiplicity.
-%
-% Safety rules (same as nd_to_loop):
-%   - No transformation when generator contains cut, IO, or meta-calls.
-%   - Order is preserved by reversing accumulators at end.
-%   - Duplicate answers preserved (accumulator collects all).
-
 :- use_module(safety, [has_side_effects/1, has_cut/1]).
 
-%% loop_splice_program(+ProgramIR, -OptimisedIR, -Report) is det.
 loop_splice_program(ProgramIR, OptimisedIR, Report) :-
-    splice_clauses(ProgramIR, SplicedClauses, HelperClauses, [], ReportRaw),
-    append(SplicedClauses, HelperClauses, OptimisedIR),
-    sort(ReportRaw, Report).
+    splice_program_clauses(ProgramIR, ConvertedClauses, HelperClauses, ReportItems),
+    append(ConvertedClauses, HelperClauses, OptimisedIR),
+    sort(ReportItems, Report).
 
-splice_clauses([], [], [], Report, Report).
-splice_clauses([Clause | Rest], [SC | SCs], HelpersOut, Report0, Report) :-
-    splice_clause(Clause, SC, HelpersHere, Item),
-    (   nonvar(Item) -> Report1 = [Item | Report0] ; Report1 = Report0 ),
-    splice_clauses(Rest, SCs, HelpersRest, Report1, Report),
-    append(HelpersHere, HelpersRest, HelpersOut).
-
-splice_clause(ir_clause(Id, Head, Body, Meta), ResultClause, Helpers, Item) :-
-    collect_findalls_over_member(Body, FindallGroups),
-    (   FindallGroups = [Group | _],
-        Group = group(List, Entries),
-        length(Entries, N), N >= 2,
-        all_entries_safe(Entries)
-    ->  build_splice(Head, Id, List, Entries, SpliceCall, Reverses, Helpers),
-        remove_findall_goals(Body, Entries, Stripped),
-        append(Stripped, [SpliceCall | Reverses], NewBody),
-        ResultClause = ir_clause(Id, Head, NewBody, Meta),
-        functor(Head, Name, Arity),
-        Item = nd_splice_converted(Name/Arity)
-    ;   ResultClause = ir_clause(Id, Head, Body, Meta),
-        Helpers = []
-    ).
-
-%% loop_splice_predicate(+Pred, +ProgramIR, -OptimisedIR, -Report) is det.
-loop_splice_predicate(_Pred, ProgramIR, OptimisedIR, Report) :-
+loop_splice_predicate(_Predicate, ProgramIR, OptimisedIR, Report) :-
     loop_splice_program(ProgramIR, OptimisedIR, Report).
 
-%% detect_spliced_templates(+Body, -Templates) is det.
-%
-% Return list of findall(Template, Generator, Out) goals that share a
-% member/2 enumerator over the same list variable.
-detect_spliced_templates(Body, Templates) :-
-    collect_findalls_over_member(Body, Groups),
-    (   Groups = [group(_, Entries) | _]
-    ->  maplist(entry_to_template, Entries, Templates)
-    ;   Templates = []
-    ).
+splice_program_clauses([], [], [], []).
+splice_program_clauses([Clause | Rest], [ConvertedClause | ConvertedRest], Helpers, Report) :-
+    splice_clause(Clause, ConvertedClause, ClauseHelpers, ClauseReport),
+    splice_program_clauses(Rest, ConvertedRest, RestHelpers, RestReport),
+    append(ClauseHelpers, RestHelpers, Helpers),
+    append(ClauseReport, RestReport, Report).
 
-entry_to_template(entry(T, _G, O, _), findall(T, _, O)).
-
-% -----------------------------------------------------------------------
-% Collect findall goals sharing the same member list
-% -----------------------------------------------------------------------
-
-collect_findalls_over_member(Body, Groups) :-
-    findall(entry(T, G, Out, List), (
-        member(findall(T, Generator, Out), Body),
-        generator_list(Generator, List)
-    ), Entries),
-    group_by_list(Entries, Groups).
-
-generator_list((member(_, List), _), List) :- !.
-generator_list(member(_, List), List).
-
-group_by_list([], []).
-group_by_list([entry(T, G, Out, List) | Rest], [group(List, [entry(T,G,Out,List) | Same]) | Groups]) :-
-    include(same_list(List), Rest, Same),
-    exclude(same_list(List), Rest, Others),
-    group_by_list(Others, Groups).
-
-same_list(List, entry(_, _, _, List2)) :- List == List2.
-
-all_entries_safe(Entries) :-
-    \+ (
-        member(entry(_, Generator, _, _), Entries),
-        generator_unsafe(Generator)
-    ).
-
-generator_unsafe(Goal) :-
-    (   has_cut(Goal)
-    ;   has_side_effects(Goal)
-    ;   compound(Goal), Goal = (A, B),
-        (generator_unsafe(A) ; generator_unsafe(B))
-    ;   compound(Goal), Goal = (A ; B),
-        (generator_unsafe(A) ; generator_unsafe(B))
-    ;   callable(Goal),
-        functor(Goal, Name, Arity),
-        member(Name/Arity, [call/1, call/2, call/3, once/1])
-    ).
-
-% -----------------------------------------------------------------------
-% Build splice loop
-% -----------------------------------------------------------------------
-
-build_splice(Head, Id, List, Entries, SpliceCall, Reverses, [BaseClause, StepClause]) :-
-    functor(Head, PredName, _),
-    atomic_list_concat([splice_loop, PredName, Id], '_', SpliceName),
-    length(Entries, N),
-    length(AccIns, N),
-    length(AccOuts, N),
-    numlist(1, N, Indices),
-    maplist(fresh_acc_in, Indices, AccIns),
-    maplist(fresh_acc_out, Indices, AccOuts),
-    maplist(build_step_goals, Entries, AccIns, AccOuts, StepGoalLists),
-    flatten(StepGoalLists, StepGoals),
-    X = _XVar,
-    RecAccIns =  AccOuts,
-    RecAccOuts = FinalOuts,
-    length(FinalOuts, N),
-    maplist(fresh_final_out, Indices, FinalOuts),
-    flatten([List, AccIns, FinalOuts], BaseArgList),
-    BaseHead =.. [SpliceName | BaseArgList],
-    base_body_goals(AccIns, FinalOuts, BaseEqs),
-    flatten([[X|List_t], AccIns, FinalOuts], StepArgList),
-    StepHead =.. [SpliceName | StepArgList],
-    flatten([List_t, RecAccIns, RecAccOuts], RecArgList),
-    RecCall  =.. [SpliceName | RecArgList],
-    append(StepGoals, [RecCall], StepBody),
-    BaseClause = ir_clause(base(SpliceName), BaseHead, BaseEqs, []),
-    StepClause = ir_clause(step(SpliceName), StepHead, StepBody, []),
-    flatten([List, replicate(N, []), FinalOuts], CallArgs),
-    SpliceCall =.. [SpliceName | CallArgs],
-    maplist(build_reverse, Entries, FinalOuts, Reverses).
-
-fresh_acc_in(I, Acc) :- term_to_atom(acc_in(I), A), term_to_atom(Acc, A).
-fresh_acc_out(I, Acc) :- term_to_atom(acc_out(I), A), term_to_atom(Acc, A).
-fresh_final_out(I, F) :- term_to_atom(final(I), A), term_to_atom(F, A).
-
-base_body_goals([], [], []).
-base_body_goals([AccIn | AccIns], [FinalOut | FinalOuts], [AccIn = FinalOut | Rest]) :-
-    base_body_goals(AccIns, FinalOuts, Rest).
-
-build_step_goals(entry(Template, (member(_, _), MapGoal), _, _), AccIn, AccOut, Goals) :-
+splice_clause(ir_clause(Id, Head, Body, Meta), ResultClause, Helpers, Report) :-
+    collect_splice_groups(Body, Groups),
+    member(group(List, Entries), Groups),
+    length(Entries, Count),
+    Count >= 2,
+    shared_prefix_for_entries(Entries, SharedPrefix),
+    SharedPrefix \== [],
+    all_entries_safe(Entries),
     !,
-    Goals = [MapGoal, AccOut = [Template | AccIn]].
-build_step_goals(entry(Template, member(_, _), _, _), AccIn, AccOut, [AccOut = [Template | AccIn]]).
-build_step_goals(entry(Template, _, _, _), AccIn, AccOut, [AccOut = [Template | AccIn]]).
+    build_splice_helper(Head, Id, List, Entries, SharedPrefix, SpliceCall, Reverses, Helpers),
+    remove_spliced_findalls(Body, Entries, RemainingGoals),
+    append(RemainingGoals, [SpliceCall | Reverses], NewBody),
+    ResultClause = ir_clause(Id, Head, NewBody, Meta),
+    functor(Head, Name, Arity),
+    Report = [nd_splice_converted(Name/Arity)].
+splice_clause(Clause, Clause, [], []).
 
-build_reverse(entry(_, _, Out, _), FinalOut, reverse(FinalOut, Out)).
+detect_spliced_templates(Body, Templates) :-
+    collect_splice_groups(Body, Groups),
+    member(group(_List, Entries), Groups),
+    length(Entries, Count),
+    Count >= 2,
+    !,
+    findall(findall(Template, Generator, Output), member(entry(Template, Generator, Output, _, _, _), Entries), Templates).
+detect_spliced_templates(_, []).
 
-replicate(0, _, []) :- !.
-replicate(N, X, [X | Rest]) :-
-    N > 0,
-    N1 is N - 1,
-    replicate(N1, X, Rest).
+collect_splice_groups(Body, Groups) :-
+    findall(
+        entry(Template, Generator, Output, X, List, RestGoals),
+        (
+            member(findall(Template, Generator, Output), Body),
+            split_member_generator(Generator, X, List, RestGoals)
+        ),
+        Entries
+    ),
+    group_entries_by_list(Entries, Groups).
 
-remove_findall_goals(Body, Entries, Stripped) :-
-    findall(Goal, (
-        member(Goal, Body),
-        \+ member(entry(_, _, _, _), Entries),
-        \+ (Goal = findall(_, _, Out), member(entry(_, _, Out, _), Entries))
-    ), Stripped0),
-    (   Stripped0 = []
-    ->  Stripped = []
-    ;   Stripped = Stripped0
+group_entries_by_list([], []).
+group_entries_by_list([Entry | Rest], [group(List, [Entry | SameList]) | Groups]) :-
+    Entry = entry(_, _, _, _, List, _),
+    include(entry_same_list(List), Rest, SameList),
+    exclude(entry_same_list(List), Rest, Remaining),
+    group_entries_by_list(Remaining, Groups).
+
+entry_same_list(List, entry(_, _, _, _, OtherList, _)) :-
+    List == OtherList.
+
+shared_prefix_for_entries([entry(_, _, _, _, _, GoalsA), entry(_, _, _, _, _, GoalsB) | Rest], Prefix) :-
+    shared_prefix(GoalsA, GoalsB, Prefix0),
+    foldl(trim_shared_prefix, Rest, Prefix0, Prefix).
+
+trim_shared_prefix(entry(_, _, _, _, _, Goals), CurrentPrefix, Prefix) :-
+    shared_prefix(CurrentPrefix, Goals, Prefix).
+
+shared_prefix([GoalA | RestA], [GoalB | RestB], [GoalA | PrefixRest]) :-
+    GoalA =@= GoalB,
+    !,
+    shared_prefix(RestA, RestB, PrefixRest).
+shared_prefix(_, _, []).
+
+all_entries_safe([]).
+all_entries_safe([entry(_, Generator, _, _, _, _) | Rest]) :-
+    \+ generator_unsafe(Generator),
+    all_entries_safe(Rest).
+
+generator_unsafe((A, B)) :-
+    (generator_unsafe(A) ; generator_unsafe(B)),
+    !.
+generator_unsafe((A ; B)) :-
+    (generator_unsafe(A) ; generator_unsafe(B)),
+    !.
+generator_unsafe(Goal) :-
+    has_cut(Goal),
+    !.
+generator_unsafe(Goal) :-
+    callable(Goal),
+    has_side_effects(Goal),
+    !.
+generator_unsafe(Goal) :-
+    callable(Goal),
+    functor(Goal, Name, Arity),
+    member(Name/Arity, [call/1, call/2, call/3, call/4, once/1]).
+
+build_splice_helper(Head, Id, List, Entries, SharedPrefix, SpliceCall, Reverses, [BaseClause, StepClause]) :-
+    functor(Head, PredicateName, _),
+    atomic_list_concat([loop_splice, PredicateName, Id], '_', HelperName),
+    build_accumulator_pairs(Entries, PairSpecs, Reverses),
+    pair_head_arguments(PairSpecs, BaseArguments),
+    BaseHead =.. [HelperName, [] | BaseArguments],
+    BaseClause = ir_clause(base(HelperName), BaseHead, [], []),
+    pair_step_arguments(PairSpecs, StepArguments),
+    first_entry_variable(Entries, X),
+    StepHead =.. [HelperName, [X | Xs] | StepArguments],
+    build_success_goals(PairSpecs, SuccessGoals),
+    success_and_failure_terms(SharedPrefix, SuccessGoals, PairSpecs, Xs, HelperName, BranchTerm),
+    StepClause = ir_clause(step(HelperName), StepHead, [BranchTerm], []),
+    build_call_arguments(List, PairSpecs, CallArguments),
+    SpliceCall =.. [HelperName | CallArguments].
+
+build_accumulator_pairs([], [], []).
+build_accumulator_pairs([entry(Template, _Generator, Output, _X, _List, RestGoals) | Rest],
+                        [pair(AccIn, AccNext, AccOut, Template, RestGoals) | PairRest],
+                        [reverse(AccOut, Output) | ReverseRest]) :-
+    build_accumulator_pairs(Rest, PairRest, ReverseRest).
+
+pair_head_arguments([], []).
+pair_head_arguments([pair(AccIn, _AccNext, AccOut, _Template, _RestGoals) | Rest], [AccIn, AccIn | ArgsRest]) :-
+    AccOut = AccIn,
+    pair_head_arguments(Rest, ArgsRest).
+
+pair_step_arguments([], []).
+pair_step_arguments([pair(AccIn, _AccNext, AccOut, _Template, _RestGoals) | Rest], [AccIn, AccOut | ArgsRest]) :-
+    pair_step_arguments(Rest, ArgsRest).
+
+first_entry_variable([entry(_, _, _, X, _, _) | _], X).
+
+build_success_goals([], []).
+build_success_goals([pair(AccIn, AccNext, _AccOut, Template, RestGoals) | Rest], Goals) :-
+    build_template_goal(RestGoals, Template, AccIn, AccNext, Goal),
+    build_success_goals(Rest, RestGoalsList),
+    append([Goal], RestGoalsList, Goals).
+
+build_template_goal([], Template, AccIn, AccNext, (AccNext = [Template | AccIn])).
+build_template_goal(RestGoals, Template, AccIn, AccNext, Goal) :-
+    goals_to_term(RestGoals, RestTerm),
+    Goal = (RestTerm -> AccNext = [Template | AccIn] ; AccNext = AccIn).
+
+success_and_failure_terms(SharedPrefix, SuccessGoals, PairSpecs, Xs, HelperName, BranchTerm) :-
+    build_recursive_call(PairSpecs, Xs, HelperName, SuccessRecCall),
+    append(SuccessGoals, [SuccessRecCall], SuccessBodyGoals),
+    goals_to_term(SuccessBodyGoals, SuccessBody),
+    build_failure_goals(PairSpecs, FailureGoals),
+    build_recursive_call(PairSpecs, Xs, HelperName, FailureRecCall),
+    append(FailureGoals, [FailureRecCall], FailureBodyGoals),
+    goals_to_term(FailureBodyGoals, FailureBody),
+    goals_to_term(SharedPrefix, SharedPrefixTerm),
+    BranchTerm = (SharedPrefixTerm -> SuccessBody ; FailureBody).
+
+build_failure_goals([], []).
+build_failure_goals([pair(AccIn, AccNext, _AccOut, _Template, _RestGoals) | Rest], [AccNext = AccIn | GoalsRest]) :-
+    build_failure_goals(Rest, GoalsRest).
+
+build_recursive_call(PairSpecs, Xs, HelperName, RecCall) :-
+    recursive_call_arguments(PairSpecs, RecursiveArgs),
+    RecCall =.. [HelperName, Xs | RecursiveArgs].
+
+recursive_call_arguments([], []).
+recursive_call_arguments([pair(_AccIn, AccNext, AccOut, _Template, _RestGoals) | Rest], [AccNext, AccOut | ArgsRest]) :-
+    recursive_call_arguments(Rest, ArgsRest).
+
+build_call_arguments(List, PairSpecs, [List | Args]) :-
+    initial_call_arguments(PairSpecs, Args).
+
+initial_call_arguments([], []).
+initial_call_arguments([pair(_AccIn, _AccNext, AccOut, _Template, _RestGoals) | Rest], [[], AccOut | ArgsRest]) :-
+    initial_call_arguments(Rest, ArgsRest).
+
+remove_spliced_findalls(Body, Entries, RemainingGoals) :-
+    findall(
+        Goal,
+        (
+            member(Goal, Body),
+            \+ goal_is_spliced_entry(Goal, Entries)
+        ),
+        RemainingGoals
     ).
+
+goal_is_spliced_entry(findall(Template, Generator, Output), Entries) :-
+    member(entry(Template, Generator, Output, _, _, _), Entries),
+    !.
+
+split_member_generator(Generator, X, List, RestGoals) :-
+    split_goals(Generator, [member(X, List) | RestGoals]),
+    RestGoals \== [].
+
+split_goals((A, B), Goals) :-
+    !,
+    split_goals(A, LeftGoals),
+    split_goals(B, RightGoals),
+    append(LeftGoals, RightGoals, Goals).
+split_goals(true, []) :-
+    !.
+split_goals(Goal, [Goal]).
+
+goals_to_term([], true).
+goals_to_term([Goal], Goal) :-
+    !.
+goals_to_term([Goal | Rest], (Goal, RestTerm)) :-
+    goals_to_term(Rest, RestTerm).
