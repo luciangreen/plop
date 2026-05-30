@@ -2719,6 +2719,8 @@ function runLoopSplice() {
   }
 
   const warnEl = document.getElementById('splice-warnings');
+  // s.unsafe is set when detectSplicedTemplates finds a splice candidate whose
+  // enumerator contains a side-effectful or unsafe goal (e.g. cut, write, assert).
   const unsafeSplice = spliced.filter(s => s.unsafe);
   warnEl.className = 'report-box' + (unsafeSplice.length ? '' : ' empty-state');
   warnEl.innerHTML = unsafeSplice.length

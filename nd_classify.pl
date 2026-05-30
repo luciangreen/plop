@@ -359,12 +359,26 @@ body_has_memo_safe_expensive(Body) :-
     nd_decl(Name/Arity, memo_safe),
     !.
 
+%% expensive_predicate_name/1
+%  Well-known expensive predicate names used as a heuristic when no explicit
+%  :- expensive/1 declaration is present. Extend as needed.
+expensive_predicate_name(expensive).
+expensive_predicate_name(costly).
+expensive_predicate_name(heavy).
+expensive_predicate_name(slow).
+expensive_predicate_name(compute).
+expensive_predicate_name(big_computation).
+expensive_predicate_name(matrix_multiply).
+expensive_predicate_name(solve).
+expensive_predicate_name(search).
+expensive_predicate_name(db_query).
+expensive_predicate_name(file_read).
+expensive_predicate_name(network_call).
+
 is_expensive_heuristic(Goal) :-
     callable(Goal),
     functor(Goal, Name, _),
-    member(Name, [expensive, costly, heavy, slow, compute,
-                  big_computation, matrix_multiply, solve, search,
-                  db_query, file_read, network_call]).
+    expensive_predicate_name(Name).
 
 body_has_map_pattern(Body) :-
     member(findall(_, Generator, _), Body),
