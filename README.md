@@ -403,6 +403,10 @@ matrix_output(A,B) :-
     
 ⸻
 
+[Youtube video](https://youtu.be/fRGbxni7JsY?si=WHAtUSe6UxuwExcy)
+
+⸻
+
 Licence
 
 BSD 3-Clause License.
