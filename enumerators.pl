@@ -15,7 +15,7 @@ collect_enumerator_pairs(ProgramIR, Pairs, IndexicalPairs) :-
             member(ir_clause(_, Head, Body, _), ProgramIR),
             predicate_from_head(Head, Pred),
             indexical_enumerators(Body, IndexicalEnums),
-            member(Goal, Body),
+            sub_term(Goal, Body),
             enumerator_goal(Goal, Enum),
             \+ member(Enum, IndexicalEnums)
         ),
@@ -75,10 +75,10 @@ indexical_enumerators(Body, Enums) :-
 indexical_enumerator(Body, nth1/3) :-
     member(nth1(_, Source, Row), Body),
     member(nth1(_, Row, _), Body),
-    Source \= Row,
+    Source \== Row,
     !.
 indexical_enumerator(Body, nth0/3) :-
     member(nth0(_, Source, Row), Body),
     member(nth0(_, Row, _), Body),
-    Source \= Row,
+    Source \== Row,
     !.

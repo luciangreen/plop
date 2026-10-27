@@ -1,414 +1,193 @@
 # plop
 
-Optimiser
+`plop` is a SWI-Prolog source-to-source optimizer for symbolic and recursive
+Prolog programs. It parses clauses into an intermediate representation (IR),
+applies conservative transformations, and can write the optimized clauses to a
+new file.
 
-Optimiser is a SWI-Prolog source-to-source optimiser for symbolic and recursive Prolog programs.
+## Requirements
 
-It analyses Prolog predicates and rewrites selected computations into simpler, faster, deterministic forms where safe.
+- SWI-Prolog 9 or newer
+- Run commands from the repository root
 
-Implemented stages include:
+## Quick start
 
-* base-up unfolding
-* memoisation
-* predicate-to-formula simplification
-* enumerator analysis
-* indexical optimisation
-* subterm-address indexing
-* recursive index-loop analysis
-* Gaussian elimination formula discovery
-* list-manipulation-to-formula optimisation
-* shortcut splicing
-* hierarchical shared-subgoal splicing
-* deterministic loop conversion
-* safety classification
-* optimisation reporting
-
-Repository contents include modules such as optimiser.pl, memoise.pl, gaussian.pl, loop_conversion.pl, and recursive_index.pl.  ￼
-
-⸻
-
-Requirements
-
-* SWI-Prolog 9+
-* Unix/macOS/Linux/WSL recommended
-
-⸻
-
-Repository Structure
-
-optimiser/
-  optimiser.pl
-  parser.pl
-  unfold.pl
-  memoise.pl
-  simplify.pl
-  enumerators.pl
-  indexical.pl
-  recursive_index.pl
-  subterm_address.pl
-  gaussian.pl
-  formula_discovery.pl
-  list_formula.pl
-  loop_conversion.pl
-  splice.pl
-  safety.pl
-  reporter.pl
-  examples/
-  tests/
-  out/
-
-⸻
-
-Quick Start
-
-Run the optimiser
-
-swipl -q -s optimiser.pl
-
-⸻
-
-Main Commands
-
-Optimise a Prolog file
-
-swipl -q -s optimiser.pl \
-  -g "optimise_file('examples/sum_to_n.pl','out/sum_to_n_opt.pl')" \
-  -t halt
-
-Expected output file:
-
-sum_to_n(N,S) :-
-    S is N*(N+1)//2.
-
-⸻
-
-Optimise a program already parsed into IR
-
-?- parse_file('examples/sum_to_n.pl', IR),
-   optimise_program(IR, OptimisedIR, Report).
-
-⸻
-
-Optimise a single predicate
-
-?- parse_file('examples/stage2_input.pl', IR),
-   optimise_predicate(p/3, IR, OptimisedIR, Report).
-
-⸻
-
-Run Tests
-
-Run all tests:
-
-swipl -q -s tests/test_optimiser.pl \
-  -g run_tests \
-  -t halt
-
-Run a specific test group:
-
-swipl -q -s tests/test_optimiser.pl \
-  -g "run_tests(gaussian)" \
-  -t halt
-
-⸻
-
-Example Optimisations
-
-Stage 1 — Base-Up Unfolding
-
-Input:
-
-inc(X,Y) :- Y is X+1.
-double(X,Y) :- Y is X*2.
-combined(X,Y) :-
-    inc(X,A),
-    double(A,Y).
-
-Run:
-
-swipl -q -s optimiser.pl \
-  -g "optimise_file('examples/stage1_input.pl','out/stage1_output.pl')" \
-  -t halt
-
-Output:
-
-combined(X,Y) :-
-    Y is (X+1)*2.
-
-⸻
-
-Stage 2 — Memoisation
-
-Input:
-
-p(X,Y,Z) :-
-    expensive(X,A),
-    expensive(X,B),
-    Y is A+1,
-    Z is B+2.
-
-Run:
-
-swipl -q -s optimiser.pl \
-  -g "optimise_file('examples/stage2_input.pl','out/stage2_output.pl')" \
-  -t halt
-
-Output:
-
-p(X,Y,Z) :-
-    expensive(X,A),
-    Y is A+1,
-    Z is A+2.
-
-⸻
-
-Stage 3 — Formula Discovery
-
-Run:
-
-swipl -q -s optimiser.pl \
-  -g "optimise_file('examples/sum_to_n.pl','out/sum_to_n_opt.pl')" \
-  -t halt
-
-Output:
-
-sum_to_n(N,S) :-
-    S is N*(N+1)//2.
-
-⸻
-
-Stage 18 — Hierarchical Shared-Subgoal Splicing
-
-Input:
-
-```prolog
-expensive(X, A) :-
-    expensive_sub(X, S),
-    finish(S, A).
-
-template1(X, T1) :-
-    expensive(X, A),
-    T1 = row1(A).
-
-template2(X, T2) :-
-    expensive(X, A),
-    T2 = row2(A).
-
-report(X, Z) :-
-    template1(X, T1),
-    template2(X, T2),
-    Z = [T1,T2].
-```
-
-Run:
+Optimize an example:
 
 ```sh
 swipl -q -s optimiser.pl \
-  -g "optimise_file('examples/hierarchical_splice_input.pl', \
-                    'out/hierarchical_splice_output.pl')" \
+  -g "optimiser:optimise_file('examples/stage1_input.pl','out/stage1_output.pl')" \
   -t halt
 ```
 
-Output:
+Inspect the result:
+
+```sh
+cat out/stage1_output.pl
+```
+
+Run the complete test suite, including hierarchical splicing:
+
+```sh
+swipl -q -s tests/run_tests.pl -g run_tests -t halt
+```
+
+Run one test group:
+
+```sh
+swipl -q -s tests/run_tests.pl -g "run_tests(indexical)" -t halt
+```
+
+The test groups are `unfold`, `memoise`, `simplify`, `indexical`,
+`subterm_address`, `enumerators`, `recursive_index`, `list_formula`, `gaussian`,
+`formula_discovery`, `loop_conversion`, `splice`, `safety`, `reporter`, and
+`hierarchical_splice`.
+
+## Features
+
+| Feature | Behavior | Implementation |
+|---|---|---|
+| Base-up unfolding | Inlines eligible defined helper predicates; recursive and side-effecting helpers are retained. | `unfold.pl` |
+| Dependency analysis | Builds predicate dependency information and hoists common dependencies shared by callers. | `dependency_graph.pl`, `common_dependency_hoist.pl` |
+| Hierarchical splicing | Shares safe, deterministic subgoals across templates while preserving output order. | `hierarchical_splice.pl` |
+| Memoization | Removes repeated calls with identical inputs when safe. | `memoise.pl` |
+| Triangular-sum formula | Replaces the recognized recursive `sum_to_n/2` recurrence with a closed-form arithmetic goal. | `simplify.pl` |
+| List-sum formulas | Replaces `build_1_to_n/2` or `build_sequence/4` followed by `sum_list/2` with arithmetic formulas when the list does not escape. | `list_formula.pl` |
+| Indexical optimization | Rewrites nested `nth1/3` access chains to `subterm_with_address/3`, including compatible grouped output shapes. | `indexical.pl`, `grouped_subterms.pl` |
+| Recursive index analysis | Reports address candidates for supported recursive traversals; `needed_subterms/3` fetches values at explicit addresses. | `recursive_index.pl`, `subterm_address.pl` |
+| Shortcut splicing | Inlines single-use arithmetic temporaries without changing clause arguments. | `splice.pl` |
+| Deterministic loop conversion | Converts supported `findall/3` patterns using `member/2`, `between/3`, `nth0/3`, or `nth1/3` into recursive helper predicates. | `loop_conversion.pl` |
+| Enumerator analysis | Reports enumerators retained, removed, or created by optimization, and identifies indexical candidates. | `enumerators.pl` |
+| Safety classification | Classifies goals as `safe`, `unsafe`, or `unknown`; unsafe or unknown changed predicates are restored by default. | `safety.pl` |
+| Polynomial utilities | Fits polynomials with Gaussian elimination and infers/verifies sequence formulas. | `gaussian.pl`, `formula_discovery.pl` |
+| Optimization reports | Returns structured report items and formats them as text. | `reporter.pl` |
+
+`optimise_program/3` applies the stages in sequence and returns a report shaped
+as `optimisation_report(Items)`. The program IR consists of
+`ir_clause(Id, Head, Goals, Metadata)` terms.
+
+## Common workflows
+
+### Optimize a file or inspect the IR
+
+```sh
+swipl -q -s optimiser.pl \
+  -g "optimiser:optimise_file('examples/sum_to_n.pl','out/sum_to_n_opt.pl')" \
+  -t halt
+```
+
+In an interactive session:
 
 ```prolog
-report(X, Z) :-
-    expensive_sub(X, S),
-    finish(S, A),
-    T1 = row1(A),
-    T2 = row2(A),
-    Z = [T1,T2].
+?- use_module(optimiser).
+?- parse_file('examples/sum_to_n.pl', IR),
+   optimise_program(IR, OptimisedIR, Report).
+?- optimise_predicate(sum_to_n/2, IR, OptimisedIR, Report).
 ```
 
-⸻
+The main module exports `optimise_file/2`, `optimise_program/3`,
+`optimise_predicate/4`, and `parse_file/2`.
 
-Gaussian Formula Discovery
+### Allow experimental rewrites
 
-Infer a sequence formula
+The default safety policy restores any changed predicate containing an
+`unsafe` or `unknown` goal. This commonly keeps transformations involving
+undefined user predicates from being emitted. For controlled experiments:
 
-?- infer_sequence_formula([1,3,6,10,15], Formula).
-
-Expected:
-
-Formula = n*(n+1)/2.
-
-⸻
-
-Fit a polynomial
-
-?- fit_polynomial([1,4,9,16,25], 2, Formula).
-
-Expected:
-
-Formula = polynomial([0,0,1]).
-
-⸻
-
-Verify a discovered formula
-
-?- verify_formula(sum_to_n, n*(n+1)/2, 1-100).
-
-⸻
-
-Indexical Optimisation
-
-Detect matrix-style indexing
-
-Input pattern:
-
-nth1(I, Matrix, Row),
-nth1(J, Row, X)
-
-Internal representation:
-
-addr(Matrix, [I,J], X)
-
-⸻
-
-Run indexical analysis
-
-?- parse_file('examples/matrix_lookup.pl', IR),
-   optimise_program(IR, _, Report).
-
-⸻
-
-Subterm Address System
-
-Query nested data
-
-?- subterm_with_address([[a,b],[c,d]], [2,1], X).
-
-Expected:
-
-X = c.
-
-⸻
-
-Extract all addresses
-
-?- subterm_addresses([[a,b],[c,d]], Pairs).
-
-⸻
-
-Recursive Index Loop Analysis
-
-Fetch only required nested values
-
-?- needed_subterms(
-       tree(tree(leaf(a), branch(b,c)), branch(d,e)),
-       [[1,2,1],[2,2]],
-       Values
-   ).
-
-Expected:
-
-Values = [b,e].
-
-⸻
-
-Optimisation Reports
-
-Print optimisation report text
-
-swipl -q -s reporter.pl \
-  -g "report_text(optimisation_report([unfolded(p/2),memoised(p/3)]),T),writeln(T)" \
-  -t halt
-
-Example output:
-
-unfolded: p/2
-memoised: p/3
-
-⸻
-
-Safety System
-
-The optimiser classifies rewrites as:
-
-safe
-unsafe
-unknown
-
-Unsafe rewrites are skipped unless experimental mode is enabled.
-
-⸻
-
-Enable experimental mode
-
-?- set_experimental_mode(true).
-
-Disable experimental mode
-
+```prolog
+?- use_module(optimiser).
+?- use_module(safety).
+?- set_experimental_mode(true),
+   optimise_file('examples/stage2_input.pl', 'out/stage2_output.pl').
 ?- set_experimental_mode(false).
+```
 
-⸻
+Experimental mode is process-global. Turn it off again after the experiment.
 
-Output Files
+### Work with indexical addresses
 
-Optimised output files are written into:
+For nested list lookups, the optimizer can replace chains of `nth1/3` with an
+address-based lookup. The generated code calls `subterm_with_address/3`; load
+`subterm_address.pl` in the program that uses that output:
 
-out/
+```prolog
+?- use_module(subterm_address).
+?- subterm_with_address([[a,b],[c,d]], [2,1], Value).
+Value = c.
+```
 
-Examples:
+The standalone address utilities also include:
 
-out/stage1_output.pl
-out/stage2_output.pl
-out/sum_to_n_opt.pl
+```prolog
+?- subterm_addresses([[a,b],[c,d]], AddressValuePairs).
+?- needed_subterms(tree(tree(leaf(a),branch(b,c)),branch(d,e)),
+                   [[1,2,1],[2,2]], Values).
+Values = [b,e].
+```
 
-⸻
+### Discover and check sequence formulas
 
-Example Full Workflow
+These are module utilities; they are not general-purpose automatic formula
+rewrites for arbitrary program predicates:
 
-swipl -q -s optimiser.pl \
-  -g "parse_file('examples/sum_to_n.pl',IR),
-      optimise_program(IR,OptIR,Report),
-      print(Report)" \
-  -t halt
+```prolog
+?- use_module(gaussian).
+?- fit_polynomial([1,4,9,16,25], 2, Formula).
+Formula = polynomial([0,0,1]).
+```
 
+```prolog
+?- use_module(formula_discovery).
+?- infer_sequence_formula([1,3,6,10,15], Formula).
+?- verify_formula(test_sequence, 2*n-1, 1-5).
+```
 
-⸻
+`verify_formula/3` calls the named two-argument predicate over the inclusive
+integer range and compares its results with the supplied formula.
 
-Input:
+### Format an optimization report
 
-matrix_output(Matrix, Output) :-
+```prolog
+?- use_module(reporter).
+?- report_text(optimisation_report([unfolded(p/2),memoised(p/3)]), Text).
+Text = "unfolded: p/2\nmemoised: p/3".
+```
 
-    nth1(1, Matrix, Row1),
+## Current limitations and remaining work
 
-    nth1(1, Row1, A),
+There is no separate roadmap or declared backlog in the repository. The
+following are current implementation boundaries and reasonable next features,
+not promised release commitments:
 
-    nth1(2, Row1, B),
+- The recursive simplifier recognizes the exact triangular-sum recurrence;
+  polynomial fitting and sequence inference are standalone utilities rather
+  than general optimizer passes.
+- List-sum rewriting recognizes only the two constructors documented above.
+- Automatic indexical rewriting currently targets `nth1/3` chains; `nth0/3`
+  chains are not rewritten.
+- Recursive-index analysis reports candidates and provides address lookup, but
+  does not yet rewrite arbitrary recursive predicates into specialized loops.
+- Loop conversion accepts only the listed enumerators and restricted mapping
+  goals. More general control flow and external variables are intentionally
+  left unchanged.
+- Safety has no user purity-annotation mechanism. Unknown calls are therefore
+  conservative by default; experimental mode bypasses that final safety gate.
+- The project currently has no packaging, configurable command-line interface,
+  or benchmark suite.
 
-    nth1(2, Matrix, Row2),
+## Repository layout
 
-    nth1(1, Row2, C),
+```text
+optimiser.pl                 Optimization pipeline and public API
+parser.pl                    Prolog source to IR parser
+*.pl                         Optimization stages and analysis utilities
+examples/                    Input programs for examples
+tests/run_tests.pl           Combined PL-Unit test loader
+tests/test_optimiser.pl       Main feature tests
+tests/test_hierarchical_splice.pl
+out/                         Example optimization outputs
+```
 
-    Output = [[A,B], C].
-    
-Use this for the final optimised file:
+## License
 
-swipl -q -s optimiser.pl \
-  -g "optimiser:optimise_file('examples/matrix_reconstruct.pl','out/matrix_reconstruct_opt.pl')" \
-  -t halt
-
-Then view it:
-
-cat out/matrix_reconstruct_opt.pl
-
-Expected output shape:
-
-matrix_output(A,B) :-
-    subterm_with_address(A,[1],[C,D]),
-    subterm_with_address(A,[2,1],F),
-    B=[[C,D],F].
-    
-⸻
-
-[Youtube video](https://youtu.be/fRGbxni7JsY?si=WHAtUSe6UxuwExcy)
-
-⸻
-
-Licence
-
-BSD 3-Clause License.
-
-Copyright © 2026 Lucian Green.
+BSD 3-Clause License. Copyright © 2026 Lucian Green.
