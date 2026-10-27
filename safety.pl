@@ -167,6 +167,7 @@ safe_predicate((=)/2).
 safe_predicate((\=)/2).
 safe_predicate((==)/2).
 safe_predicate((\==)/2).
+safe_predicate(subterm_with_address/3).
 safe_predicate(functor/3).
 safe_predicate(arg/3).
 safe_predicate((=..)/2).

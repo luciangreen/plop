@@ -45,12 +45,24 @@ classify_sum_clauses(Name, C1, C2, Recursive) :-
     is_sum_recursive_clause(Name, Recursive, _, _).
 
 is_sum_base_clause(Name, ir_clause(_, Head, [], _)) :-
-    Head =.. [Name, 0, 0].
+    Head =.. [Name, Input, Output],
+    Input == 0,
+    Output == 0.
 
 is_sum_recursive_clause(Name, ir_clause(_, Head, Body, _), N, S) :-
     Head =.. [Name, N, S],
-    Body = [N > 0, N1 is N - 1, RecGoal, S is S1 + N],
-    RecGoal =.. [Name, N1, S1].
+    Body = [Positive, Decrement, RecGoal, Sum],
+    Positive =.. [>, PositiveN, 0],
+    PositiveN == N,
+    Decrement =.. [is, N1, Difference],
+    Difference =.. [-, DifferenceN, 1],
+    DifferenceN == N,
+    RecGoal =.. [Name, RecursiveN, S1],
+    RecursiveN == N1,
+    Sum =.. [is, SumOutput, Addition],
+    SumOutput == S,
+    Addition =.. [+, S1, Addend],
+    Addend == N.
 
 extract_sum_recursive_vars(Name, RecursiveClause, N, S) :-
     is_sum_recursive_clause(Name, RecursiveClause, N, S).

@@ -37,7 +37,7 @@ test(optimise_file_writes_output, [setup(make_directory_path('out')), cleanup(cl
     optimise_file('examples/stage1_input.pl', OutputPath),
     parse_file(OutputPath, ProgramIR),
     member(ir_clause(_, combined(_, _), Body, _), ProgramIR),
-    assertion(Body = [Y is (X + 1) * 2]).
+    assertion(Body = [_Y is (_X + 1) * 2]).
 
 cleanup_output_file :-
     output_file_path(OutputPath),
@@ -87,7 +87,7 @@ test(does_not_memoise_io_goals) :-
     assertion(length(Body, 2)),
     assertion(Report = []).
 
-test(optimise_program_applies_memoisation) :-
+test(optimise_program_applies_memoisation, [setup(safety:set_experimental_mode(true)), cleanup(safety:set_experimental_mode(false))]) :-
     ProgramIR = [
         ir_clause(c1, r(X, Y, Z),
             [expensive(X, A), expensive(X, B), (Y is A + 1), (Z is B + 2)],
@@ -177,8 +177,10 @@ test(optimise_program_includes_stage5_report_items) :-
     ProgramIR = [
         ir_clause(c1, lookup(Matrix, I, J, X), [nth1(I, Matrix, Row), nth1(J, Row, X)], [])
     ],
-    optimise_program(ProgramIR, _OptimisedIR, optimisation_report(Report)),
-    assertion(member(indexical_mapping(lookup/4, addr(Matrix, [I, J], X)), Report)).
+    optimise_program(ProgramIR, OptimisedIR, optimisation_report(Report)),
+    assertion(member(indexical_mapping(lookup/4, addr(Matrix, [I, J], X)), Report)),
+    member(ir_clause(_, lookup(Matrix, I, J, X), Body, _), OptimisedIR),
+    assertion(Body == [subterm_with_address(Matrix, [I, J], X)]).
 
 test(does_not_emit_mapping_for_single_level_nth) :-
     ProgramIR = [
@@ -189,12 +191,12 @@ test(does_not_emit_mapping_for_single_level_nth) :-
 
 test(rewrite_index_chain_to_subterm_collects_source_aware_mappings) :-
     Body = [nth1(I, Matrix, Row), nth1(J, Row, X)],
-    rewrite_index_chain_to_subterm(Body, NewBody, Mappings),
+    indexical:rewrite_index_chain_to_subterm(Body, NewBody, Mappings),
     assertion(NewBody = [subterm_with_address(Matrix, [I, J], X)]),
     assertion(Mappings = [addr(Matrix, [I, J], X)]).
 
 test(reconstruct_output_from_addresses_groups_full_output_shape) :-
-    reconstruct_output_from_addresses(
+    indexical:reconstruct_output_from_addresses(
         T,
         [A, B],
         [addr(T, [1, 1, 1], A), addr(T, [1, 1, 2], B)],
@@ -203,7 +205,7 @@ test(reconstruct_output_from_addresses_groups_full_output_shape) :-
     assertion(Goals = [subterm_with_address(T, [1, 1], [A, B])]).
 
 test(reconstruct_output_from_addresses_groups_partial_output_shape) :-
-    reconstruct_output_from_addresses(
+    indexical:reconstruct_output_from_addresses(
         T,
         [[A, B], C],
         [addr(T, [1, 1, 1], A), addr(T, [1, 1, 2], B), addr(T, [2], C)],
@@ -213,8 +215,8 @@ test(reconstruct_output_from_addresses_groups_partial_output_shape) :-
     assertion(member(subterm_with_address(T, [2], C), Goals)).
 
 test(common_prefix_and_local_address_helpers_work) :-
-    common_address_prefix([[1, 1, 1], [1, 1, 2], [1, 1, 3]], Prefix),
-    local_address(Prefix, [1, 1, 3], Local),
+    indexical:common_address_prefix([[1, 1, 1], [1, 1, 2], [1, 1, 3]], Prefix),
+    indexical:local_address(Prefix, [1, 1, 3], Local),
     assertion(Prefix == [1, 1]),
     assertion(Local == [3]).
 
@@ -461,7 +463,7 @@ test(converts_member_findall_to_deterministic_loop) :-
     member(ir_clause(_, BaseHead, [], _), OptimisedIR),
     functor(BaseHead, HelperName, 2),
     member(ir_clause(_, StepHead, StepBody, _), OptimisedIR),
-    functor(StepHead, HelperName, 2),
+    StepHead =.. [HelperName, [_ | _], [_ | _]],
     assertion(member(loop_converted(p/2), Report)),
     assertion(StepBody = [process(_, _), _]).
 
@@ -471,12 +473,10 @@ test(converts_between_findall_to_deterministic_loop) :-
     ],
     convert_deterministic_loops(ProgramIR, OptimisedIR, Report),
     member(ir_clause(_, p(_, _), [HelperCall], _), OptimisedIR),
-    functor(HelperCall, HelperName, 3),
+    functor(HelperCall, _HelperName, 3),
     assertion(member(loop_converted(p/2), Report)),
-    member(ir_clause(_, StepHead, StepBody, _), OptimisedIR),
-    functor(StepHead, HelperName, 3),
-    assertion(member(_ =< _, StepBody)),
-    assertion(member(_ is _ + 1, StepBody)).
+    assertion((member(ir_clause(_, _, StepBody, _), OptimisedIR), member(_ =< _, StepBody))),
+    assertion((member(ir_clause(_, _, StepBody2, _), OptimisedIR), member(_ is _ + 1, StepBody2))).
 
 test(converts_nth0_findall_to_deterministic_loop) :-
     ProgramIR = [
@@ -484,12 +484,10 @@ test(converts_nth0_findall_to_deterministic_loop) :-
     ],
     convert_deterministic_loops(ProgramIR, OptimisedIR, Report),
     member(ir_clause(_, p(_, _), [HelperCall], _), OptimisedIR),
-    functor(HelperCall, HelperName, 3),
+    functor(HelperCall, _HelperName, 3),
     assertion(member(loop_converted(p/2), Report)),
-    member(ir_clause(_, StepHead, StepBody, _), OptimisedIR),
-    functor(StepHead, HelperName, 3),
-    assertion(member(pair(_, _, _), StepBody)),
-    assertion(member(_ is _ + 1, StepBody)).
+    assertion((member(ir_clause(_, _, StepBody, _), OptimisedIR), member(pair(_, _, _), StepBody))),
+    assertion((member(ir_clause(_, _, StepBody2, _), OptimisedIR), member(_ is _ + 1, StepBody2))).
 
 test(does_not_convert_when_map_goal_uses_external_variable) :-
     ProgramIR = [
@@ -690,7 +688,7 @@ test(report_text_formats_required_items) :-
         unfolded(p/2),
         memoised(q/1),
         formula_discovered(sum_to_n/2, n_times_n_plus_1_over_2),
-        indexical_mapping(lookup/4, addr(M, [I, J], X)),
+        indexical_mapping(lookup/4, addr(_, [_, _], _)),
         loop_converted(seq_sum/2),
         skipped(r/3, unsafe)
     ]),
